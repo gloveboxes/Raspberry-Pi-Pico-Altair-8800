@@ -187,13 +187,13 @@ static uint8_t (*const opcode_handlers[256])(intel8080_t *cpu) = {
 };
 
 void i8080_reset(intel8080_t *cpu, port_in in, port_out out, read_sense_switches sense,
-                        disk_controller_t *disk_controller, azure_sphere_port_in sphere_port_in, azure_sphere_port_out sphere_port_out)
+			 disk_controller_t *disk_controller, io_port_in_fn io_in, io_port_out_fn io_out)
 {
 	memset(cpu, 0, sizeof(intel8080_t));
 	cpu->term_in = in;
 	cpu->term_out = out;
-	cpu->_sphere_port_in = sphere_port_in;
-	cpu->_sphere_port_out = sphere_port_out;
+	cpu->io_port_in_handler = io_in;
+	cpu->io_port_out_handler = io_out;
 	cpu->disk_controller = *disk_controller;
 	cpu->registers.flags = 0x2;
 	cpu->sense = sense;
@@ -832,7 +832,7 @@ uint8_t i8080_in(intel8080_t *cpu)
 		break;
 	default:
 		cpu->registers.a = 0xff;
-		cpu->registers.a = cpu->_sphere_port_in(port);
+		cpu->registers.a = cpu->io_port_in_handler(port);
 		//printf("IN PORT %x\n", cpu->data_bus);
 		break;
 	}
@@ -865,7 +865,7 @@ uint8_t i8080_out(intel8080_t *cpu)
 		cpu->term_out(cpu->registers.a);
 		break;
 	default:
-		cpu->_sphere_port_out(port,cpu->registers.a);
+		cpu->io_port_out_handler(port, cpu->registers.a);
 		// printf("OUT PORT %x, DATA: %x\n", read8(cpu->registers.pc + 1), cpu->registers.a);
 		break;
 	}

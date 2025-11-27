@@ -17,7 +17,7 @@
 static intel8080_t cpu;
 
 // Terminal read function - non-blocking
-static char terminal_read(void)
+static uint8_t terminal_read(void)
 {
     // Translate ANSI cursor sequences to the control keys CP/M expects (WordStar style).
     enum
@@ -47,9 +47,9 @@ static char terminal_read(void)
         }
         if (ch == 0x7F || ch == '\b')
         {
-            return CTRL_KEY('H'); // Map delete/backspace to Ctrl-H
+            return (uint8_t)CTRL_KEY('H'); // Map delete/backspace to Ctrl-H
         }
-        return (char)ch;
+        return ch;
 
     case KEY_STATE_ESC:
         if (ch == '[')
@@ -58,20 +58,20 @@ static char terminal_read(void)
             return 0x00; // Control sequence introducer
         }
         key_state = KEY_STATE_NORMAL;
-        return (char)ch; // Pass through unknown sequences
+        return ch; // Pass through unknown sequences
 
     case KEY_STATE_ESC_BRACKET:
         key_state = KEY_STATE_NORMAL;
         switch (ch)
         {
         case 'A':
-            return CTRL_KEY('E'); // Up -> Ctrl-E
+            return (uint8_t)CTRL_KEY('E'); // Up -> Ctrl-E
         case 'B':
-            return CTRL_KEY('X'); // Down -> Ctrl-X
+            return (uint8_t)CTRL_KEY('X'); // Down -> Ctrl-X
         case 'C':
-            return CTRL_KEY('D'); // Right -> Ctrl-D
+            return (uint8_t)CTRL_KEY('D'); // Right -> Ctrl-D
         case 'D':
-            return CTRL_KEY('S'); // Left -> Ctrl-S
+            return (uint8_t)CTRL_KEY('S'); // Left -> Ctrl-S
         default:
             return 0x00; // Ignore other sequences
         }
@@ -174,12 +174,12 @@ int main(void)
     // Reset and initialize the CPU
     printf("Initializing Intel 8080 CPU...\n");
     i8080_reset(&cpu,
-                (port_in)terminal_read,
-                (port_out)terminal_write,
+                terminal_read,
+                terminal_write,
                 sense,
                 &disk_controller,
-                (azure_sphere_port_in)io_port_in,
-                (azure_sphere_port_out)io_port_out);
+                io_port_in,
+                io_port_out);
 
     // Set CPU to start at ROM_LOADER_ADDRESS (0xFF00) to boot from disk
     printf("Setting CPU to ROM_LOADER_ADDRESS (0xFF00) to boot from disk\n");

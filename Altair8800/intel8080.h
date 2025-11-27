@@ -57,8 +57,8 @@ typedef struct
 	uint16_t pc;
 } registers_t;
 
-typedef void (*azure_sphere_port_out)(uint8_t port, uint8_t data);
-typedef uint8_t(*azure_sphere_port_in)(uint8_t port);
+typedef void (*io_port_out_fn)(uint8_t port, uint8_t data);
+typedef uint8_t (*io_port_in_fn)(uint8_t port);
 
 typedef void (*port_out)(uint8_t b);
 typedef uint8_t (*port_in)(void);
@@ -83,8 +83,8 @@ typedef struct
 
 	registers_t registers;
 
-	azure_sphere_port_in _sphere_port_in;
-	azure_sphere_port_out _sphere_port_out;
+	io_port_in_fn io_port_in_handler;
+	io_port_out_fn io_port_out_handler;
 
 	port_in term_in;
 	port_out term_out;
@@ -95,7 +95,7 @@ typedef struct
 } intel8080_t;
 
 void i8080_reset(intel8080_t *cpu, port_in in, port_out out, read_sense_switches sense,
-			disk_controller_t *disk_controller, azure_sphere_port_in, azure_sphere_port_out);
+		 disk_controller_t *disk_controller, io_port_in_fn io_in, io_port_out_fn io_out);
 void i8080_deposit(intel8080_t *cpu, uint8_t data);
 void i8080_deposit_next(intel8080_t *cpu, uint8_t data);
 

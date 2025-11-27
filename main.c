@@ -3,8 +3,12 @@
 #include <stdio.h>
 #include "Altair8800/intel8080.h"
 #include "Altair8800/memory.h"
+#include "Altair8800/pico_disk.h"
 
 #define ASCII_MASK_7BIT 0x7F
+
+// Include the CPM disk image
+#include "Altair8800/cpm63k_disk.h"
 
 // Global CPU instance
 static intel8080_t cpu;
@@ -33,16 +37,37 @@ static inline uint8_t sense(void)
     return 0x00; // No sense switches on Pico
 }
 
-// Port I/O stubs
+// Port I/O for disk controller
 static void io_port_out(uint8_t port, uint8_t data)
 {
-    // Stub - do nothing for now
+    switch (port) {
+        case 0x08:  // Disk select
+            pico_disk_select(data);
+            break;
+        case 0x09:  // Disk control
+            pico_disk_function(data);
+            break;
+        case 0x0A:  // Disk write
+            pico_disk_write(data);
+            break;
+        default:
+            // Other ports - do nothing
+            break;
+    }
 }
 
 static uint8_t io_port_in(uint8_t port)
 {
-    // Stub - return 0 for now
-    return 0x00;
+    switch (port) {
+        case 0x08:  // Disk status
+            return pico_disk_status();
+        case 0x09:  // Sector position
+            return pico_disk_sector();
+        case 0x0A:  // Disk read
+            return pico_disk_read();
+        default:
+            return 0x00;
+    }
 }
 
 int main(void)
@@ -94,12 +119,32 @@ int main(void)
     printf("========================================\n");
     printf("\n");
 
-    // Load 8K BASIC ROM into memory at address 0x0000
-    printf("Loading 8K BASIC ROM...\n");
-    load8kRom(0x0000);
+    // Initialize disk controller
+    printf("Initializing disk controller...\n");
+    pico_disk_init();
+    
+    // Load CPM disk image into drive 0 (DISK_A)
+    printf("Opening DISK_A: cpm63k.dsk\n");
+    if (pico_disk_load(0, cpm63k_dsk, cpm63k_dsk_len)) {
+        printf("DISK_A opened successfully (%u bytes)\n", cpm63k_dsk_len);
+    } else {
+        printf("DISK_A initialization failed!\n");
+        return -1;
+    }
 
-    // Initialize disk controller (stubbed)
-    disk_controller_t disk_controller = {0};
+    // Load disk boot loader ROM at 0xFF00 (ROM_LOADER_ADDRESS)
+    printf("Loading disk boot loader ROM at 0xFF00...\n");
+    loadDiskLoader(0xFF00);
+
+    // Set up disk controller structure for CPU
+    disk_controller_t disk_controller = {
+        .disk_select = (port_out)pico_disk_select,
+        .disk_status = (port_in)pico_disk_status,
+        .disk_function = (port_out)pico_disk_function,
+        .sector = (port_in)pico_disk_sector,
+        .write = (port_out)pico_disk_write,
+        .read = (port_in)pico_disk_read
+    };
 
     // Reset and initialize the CPU
     printf("Initializing Intel 8080 CPU...\n");
@@ -111,9 +156,9 @@ int main(void)
                 (azure_sphere_port_in)io_port_in,
                 (azure_sphere_port_out)io_port_out);
 
-    // Set CPU to start at address 0x0000 to load BASIC
-    printf("Setting CPU to address 0x0000 to load BASIC\n");
-    i8080_examine(&cpu, 0x0000);
+    // Set CPU to start at ROM_LOADER_ADDRESS (0xFF00) to boot from disk
+    printf("Setting CPU to ROM_LOADER_ADDRESS (0xFF00) to boot from disk\n");
+    i8080_examine(&cpu, 0xFF00);
 
     // Report memory usage
     extern char __StackLimit, __bss_end__;

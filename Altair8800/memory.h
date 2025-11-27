@@ -57,6 +57,7 @@
 
 extern uint8_t memory[64 * 1024];
 
+void loadDiskLoader(uint16_t address);
 void load4kRom(uint16_t address);
 void load8kRom(uint16_t address);
 

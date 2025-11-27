@@ -13,6 +13,7 @@ add_executable(altair
     main.c
     Altair8800/intel8080.c
     Altair8800/memory.c
+    Altair8800/pico_disk.c
 )
 
 # Make sure all CYW43 headers are visible and include Altair8800 directory

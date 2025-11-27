@@ -1,0 +1,25 @@
+# Build directory
+build/
+
+# CMake
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles/
+
+# Pico SDK build artifacts
+*.elf
+*.bin
+*.hex
+*.uf2
+*.dis
+*.map
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store

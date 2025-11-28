@@ -4,7 +4,7 @@
         {
             "label": "Build Altair (Release)",
             "type": "shell",
-            "command": "cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --target clean && cmake --build build && mkdir -p deploy && cp build/altair.uf2 deploy/",
+            "command": "cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --target clean && cmake --build build -- -j && mkdir -p deploy && cp build/altair.uf2 deploy/",
             "options": {
                 "cwd": "${workspaceFolder}"
             },
@@ -19,7 +19,7 @@
         {
             "label": "Build Altair (Debug)",
             "type": "shell",
-            "command": "cmake -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build",
+            "command": "cmake -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build -- -j",
             "options": {
                 "cwd": "${workspaceFolder}"
             },

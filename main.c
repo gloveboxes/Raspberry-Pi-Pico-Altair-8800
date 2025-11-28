@@ -23,16 +23,6 @@ static intel8080_t cpu;
 // Terminal read function - non-blocking
 static uint8_t terminal_read(void)
 {
-    // Translate ANSI cursor sequences to the control keys CP/M expects (WordStar style).
-    enum
-    {
-        KEY_STATE_NORMAL = 0,
-        KEY_STATE_ESC,
-        KEY_STATE_ESC_BRACKET
-    };
-
-    static uint8_t key_state = KEY_STATE_NORMAL;
-
     uint8_t ws_ch = 0;
     if (websocket_console_try_dequeue_input(&ws_ch))
     {
@@ -47,48 +37,13 @@ static uint8_t terminal_read(void)
 
     uint8_t ch = (uint8_t)(c & ASCII_MASK_7BIT);
 
-    switch (key_state)
+    // Map delete/backspace to Ctrl-H
+    if (ch == 0x7F || ch == '\b')
     {
-    case KEY_STATE_NORMAL:
-        if (ch == 0x1B)
-        {
-            key_state = KEY_STATE_ESC;
-            return 0x00; // Start of escape sequence
-        }
-        if (ch == 0x7F || ch == '\b')
-        {
-            return (uint8_t)CTRL_KEY('H'); // Map delete/backspace to Ctrl-H
-        }
-        return ch;
-
-    case KEY_STATE_ESC:
-        if (ch == '[')
-        {
-            key_state = KEY_STATE_ESC_BRACKET;
-            return 0x00; // Control sequence introducer
-        }
-        key_state = KEY_STATE_NORMAL;
-        return ch; // Pass through unknown sequences
-
-    case KEY_STATE_ESC_BRACKET:
-        key_state = KEY_STATE_NORMAL;
-        switch (ch)
-        {
-        case 'A':
-            return (uint8_t)CTRL_KEY('E'); // Up -> Ctrl-E
-        case 'B':
-            return (uint8_t)CTRL_KEY('X'); // Down -> Ctrl-X
-        case 'C':
-            return (uint8_t)CTRL_KEY('D'); // Right -> Ctrl-D
-        case 'D':
-            return (uint8_t)CTRL_KEY('S'); // Left -> Ctrl-S
-        default:
-            return 0x00; // Ignore other sequences
-        }
+        return (uint8_t)CTRL_KEY('H');
     }
 
-    key_state = KEY_STATE_NORMAL;
-    return 0x00;
+    return ch;
 }
 
 // Terminal write function

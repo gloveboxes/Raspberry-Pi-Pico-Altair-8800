@@ -1,5 +1,16 @@
 # Raspberry Pi Pico Altair 8800
 
+## Clone With Submodules
+
+This project bundles Pimoroni's Pico helper libraries as a git submodule.
+Clone (or update) with:
+
+```shell
+git clone --recurse-submodules https://github.com/gloveboxes/Raspberyy-Pi-Pico-2-W-Altair-8800.git
+# or, if already cloned
+git submodule update --init --recursive
+```
+
 ## Serial Terminal
 
 ### macos
@@ -28,8 +39,17 @@
     ```
     The values are injected as preprocessor macros. (You can still fall back to defining `PICO_DEFAULT_WIFI_SSID`/`PICO_DEFAULT_WIFI_PASSWORD` elsewhere if you prefer.)
 2. Build and flash as usual. On boot the Pico W connects to Wi-Fi and starts a WebSocket console on port `8082`.
-3. Use any WebSocket-capable client (e.g., a small web page or `wscat`) to connect to `ws://<pico-ip>:8082/` and interact with the Altair terminal alongside USB serial.
+3. Point a browser at `http://<pico-ip>:8082/` to load the bundled console UI, or use any WebSocket-capable client (e.g., `wscat`) to connect to `ws://<pico-ip>:8082/` and interact with the Altair terminal alongside USB serial.
 4. USB serial stays active; terminal I/O is mirrored between USB and the WebSocket session.
+
+### CMake Configuration Options
+
+| Option | Default | Purpose |
+| --- | --- | --- |
+| `-DWIFI_SSID=""` | empty | Wi-Fi SSID for the Pico W (passed to firmware at build time). |
+| `-DWIFI_PASSWORD=""` | empty | Wi-Fi password accompanying the SSID. |
+| `-DENABLE_INKY_DISPLAY=ON` | ON | Pulls in the Pimoroni Inky Pack driver and shows the welcome/IP screen. Set to `OFF` to save flash/RAM when the display isn't connected. |
+| `-DCMAKE_BUILD_TYPE=Release` | Debug | Usual CMake switch for optimized builds (recommended). |
 
 ## Regenerate Disk Image Header
 
@@ -37,7 +57,7 @@
 2. Run the following command
 
     ```shell
-    python3 dsk_to_header.py --input cpm63k.dsk --output cpm63k_disk.h --symbol cpm63k_dsk
+    python3 dsk_to_header.py --input cpm63k.dsk --output Altair8800/cpm63k_disk.h --symbol cpm63k_dsk
     ```
 
 3. Copy the .h file to the Altair8800 folder

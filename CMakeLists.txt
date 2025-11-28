@@ -3,11 +3,53 @@ cmake_minimum_required(VERSION 3.13)
 # 💡 Select board BEFORE importing SDK (safer)
 set(PICO_BOARD pico2_w)
 
+# Use custom mbedtls config from project root
+set(PICO_MBEDTLS_CONFIG_FILE "${CMAKE_CURRENT_LIST_DIR}/mbedtls_config.h" CACHE FILEPATH "Custom mbedTLS config")
+
 # Import Pico SDK
 include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 
 project(altair C CXX ASM)
 pico_sdk_init()
+
+set(PICO_WS_SERVER_DIR ${CMAKE_CURRENT_LIST_DIR}/lib/pico-ws-server)
+
+add_library(lwipopts_provider INTERFACE)
+target_include_directories(lwipopts_provider INTERFACE ${CMAKE_CURRENT_LIST_DIR})
+
+add_library(pico_ws_server
+    ${PICO_WS_SERVER_DIR}/src/client_connection.cpp
+    ${PICO_WS_SERVER_DIR}/src/http_handler.cpp
+    ${PICO_WS_SERVER_DIR}/src/web_socket_frame_builder.cpp
+    ${PICO_WS_SERVER_DIR}/src/web_socket_handler.cpp
+    ${PICO_WS_SERVER_DIR}/src/web_socket_message_builder.cpp
+    ${PICO_WS_SERVER_DIR}/src/web_socket_server.cpp
+    ${PICO_WS_SERVER_DIR}/src/web_socket_server_internal.cpp
+)
+
+target_include_directories(pico_ws_server BEFORE
+    PUBLIC ${PICO_WS_SERVER_DIR}/include
+    PUBLIC ${CMAKE_CURRENT_LIST_DIR}
+    PRIVATE ${PICO_WS_SERVER_DIR}/src
+)
+
+target_compile_definitions(pico_ws_server PUBLIC
+    DEBUG_PRINT=0
+)
+
+# Add compatibility header for mbedtls API changes
+target_compile_options(pico_ws_server PRIVATE
+    $<$<COMPILE_LANGUAGE:CXX>:-include${CMAKE_CURRENT_LIST_DIR}/mbedtls_compat.h>
+)
+
+target_link_libraries(pico_ws_server
+    PUBLIC
+        pico_stdlib
+        pico_cyw43_driver
+        pico_lwip_nosys
+        pico_mbedtls
+        lwipopts_provider
+)
 
 set(WIFI_SSID "" CACHE STRING "Wi-Fi network SSID for CYW43 station mode")
 set(WIFI_PASSWORD "" CACHE STRING "Wi-Fi network password for CYW43 station mode")
@@ -22,7 +64,7 @@ set(ALTAIR_SOURCES
     PortDrivers/time_io.c
     PortDrivers/utility_io.c
     wifi.c
-    ws.c
+    ws.cpp
     websocket_console.c
 )
 
@@ -66,6 +108,7 @@ target_link_libraries(altair
     pico_stdlib
     pico_cyw43_arch_lwip_threadsafe_background
     pico_multicore
+    pico_ws_server
     ${ALTAIR_LIBS}
 )
 

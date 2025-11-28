@@ -14,7 +14,16 @@ typedef struct
     void *user_data;
 } ws_callbacks_t;
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 void ws_init(const ws_callbacks_t *callbacks);
 bool ws_start(void);
 bool ws_is_running(void);
 void ws_poll(void);
+
+#ifdef __cplusplus
+}
+#endif

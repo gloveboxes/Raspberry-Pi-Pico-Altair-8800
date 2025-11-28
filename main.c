@@ -94,7 +94,6 @@ static inline uint8_t sense(void)
     return 0x00; // No sense switches on Pico
 }
 
-
 int main(void)
 {
     // Initialize stdio first
@@ -147,12 +146,15 @@ int main(void)
     // Initialize disk controller
     printf("Initializing disk controller...\n");
     pico_disk_init();
-    
+
     // Load CPM disk image into drive 0 (DISK_A)
     printf("Opening DISK_A: cpm63k.dsk\n");
-    if (pico_disk_load(0, cpm63k_dsk, cpm63k_dsk_len)) {
+    if (pico_disk_load(0, cpm63k_dsk, cpm63k_dsk_len))
+    {
         printf("DISK_A opened successfully (%u bytes)\n", cpm63k_dsk_len);
-    } else {
+    }
+    else
+    {
         printf("DISK_A initialization failed!\n");
         return -1;
     }
@@ -168,8 +170,7 @@ int main(void)
         .disk_function = (port_out)pico_disk_function,
         .sector = (port_in)pico_disk_sector,
         .write = (port_out)pico_disk_write,
-        .read = (port_in)pico_disk_read
-    };
+        .read = (port_in)pico_disk_read};
 
     // Reset and initialize the CPU
     printf("Initializing Intel 8080 CPU...\n");

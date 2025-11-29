@@ -3,4 +3,4 @@
 	url = https://github.com/pimoroni/pimoroni-pico
 [submodule "lib/pico-ws-server"]
 	path = lib/pico-ws-server
-	url = https://github.com/cadouthat/pico-ws-server.git
+	url = https://github.com/gloveboxes/pico-ws-server.git

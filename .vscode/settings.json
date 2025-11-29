@@ -3,6 +3,7 @@
   "cmake.buildDirectory": "${workspaceFolder}/build",
   "cmake.configureOnOpen": true,
   "files.associations": {
-    "stdio.h": "c"
+    "stdio.h": "c",
+    "list": "cpp"
   }
 }

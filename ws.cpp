@@ -10,7 +10,8 @@ namespace
 {
 static constexpr uint16_t WS_SERVER_PORT = 8082;
 static constexpr uint32_t WS_MAX_CLIENTS = 1;
-static constexpr size_t WS_FRAME_PAYLOAD = 96;
+static constexpr size_t WS_FRAME_PAYLOAD = 256;
+static constexpr size_t WS_MAX_FRAMES_PER_POLL = 16;
 
 struct ws_context_t
 {
@@ -25,19 +26,29 @@ static std::unique_ptr<WebSocketServer> g_ws_server;
 
 void handle_connect(WebSocketServer &server, uint32_t conn_id)
 {
-    (void)server;
     ++g_ws_active_clients;
     printf("WebSocket client connected (id=%u)\n", conn_id);
+
+    ws_context_t *ctx = static_cast<ws_context_t *>(server.getCallbackExtra());
+    if (ctx && ctx->callbacks.on_client_connected)
+    {
+        ctx->callbacks.on_client_connected(ctx->callbacks.user_data);
+    }
 }
 
 void handle_close(WebSocketServer &server, uint32_t conn_id)
 {
-    (void)server;
     if (g_ws_active_clients > 0)
     {
         --g_ws_active_clients;
     }
     printf("WebSocket client closed (id=%u)\n", conn_id);
+
+    ws_context_t *ctx = static_cast<ws_context_t *>(server.getCallbackExtra());
+    if (ctx && ctx->callbacks.on_client_disconnected)
+    {
+        ctx->callbacks.on_client_disconnected(ctx->callbacks.user_data);
+    }
 }
 
 void handle_message(WebSocketServer &server, uint32_t conn_id, const void *data, size_t len)
@@ -118,6 +129,11 @@ bool ws_is_running(void)
     return g_ws_running && g_ws_server != nullptr;
 }
 
+bool ws_has_active_clients(void)
+{
+    return g_ws_active_clients > 0;
+}
+
 void ws_poll(void)
 {
     if (!g_ws_running || !g_ws_server)
@@ -133,21 +149,15 @@ void ws_poll(void)
     }
 
     uint8_t payload[WS_FRAME_PAYLOAD];
-    size_t payload_len = g_ws_context.callbacks.on_output(payload, sizeof(payload), g_ws_context.callbacks.user_data);
-    if (payload_len > 0)
+
+    for (size_t frame = 0; frame < WS_MAX_FRAMES_PER_POLL; ++frame)
     {
-        bool has_nul = std::memchr(payload, 0, payload_len) != nullptr;
-        if (!has_nul)
+        size_t payload_len = g_ws_context.callbacks.on_output(payload, sizeof(payload), g_ws_context.callbacks.user_data);
+        if (payload_len == 0)
         {
-            char text_payload[WS_FRAME_PAYLOAD + 1];
-            std::memcpy(text_payload, payload, payload_len);
-            text_payload[payload_len] = '\0';
-            g_ws_server->broadcastMessage(text_payload);
+            break;
         }
-        else
-        {
-            g_ws_server->broadcastMessage(payload, payload_len);
-        }
+        g_ws_server->broadcastMessage(payload, payload_len);
     }
 }
 

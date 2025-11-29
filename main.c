@@ -20,13 +20,99 @@
 // Global CPU instance
 static intel8080_t cpu;
 
+// Process character through ANSI escape sequence state machine
+static uint8_t process_ansi_sequence(uint8_t ch)
+{
+    // Translate ANSI cursor sequences to the control keys CP/M expects (WordStar style).
+    enum
+    {
+        KEY_STATE_NORMAL = 0,
+        KEY_STATE_ESC,
+        KEY_STATE_ESC_BRACKET,
+        KEY_STATE_ESC_BRACKET_NUM
+    };
+
+    static uint8_t key_state = KEY_STATE_NORMAL;
+    static uint8_t pending_key = 0;
+
+    switch (key_state)
+    {
+    case KEY_STATE_NORMAL:
+        if (ch == 0x1B)
+        {
+            key_state = KEY_STATE_ESC;
+            return 0x00; // Start of escape sequence
+        }
+        if (ch == 0x7F || ch == 0x08)
+        {
+            return (uint8_t)CTRL_KEY('H'); // Map delete/backspace to Ctrl-H (0x08)
+        }
+        return ch;
+
+    case KEY_STATE_ESC:
+        if (ch == '[')
+        {
+            key_state = KEY_STATE_ESC_BRACKET;
+            return 0x00; // Control sequence introducer
+        }
+        key_state = KEY_STATE_NORMAL;
+        return ch; // Pass through unknown sequences
+
+    case KEY_STATE_ESC_BRACKET:
+        switch (ch)
+        {
+        case 'A':
+            key_state = KEY_STATE_NORMAL;
+            return (uint8_t)CTRL_KEY('E'); // Up -> Ctrl-E
+        case 'B':
+            key_state = KEY_STATE_NORMAL;
+            return (uint8_t)CTRL_KEY('X'); // Down -> Ctrl-X
+        case 'C':
+            key_state = KEY_STATE_NORMAL;
+            return (uint8_t)CTRL_KEY('D'); // Right -> Ctrl-D
+        case 'D':
+            key_state = KEY_STATE_NORMAL;
+            return (uint8_t)CTRL_KEY('S'); // Left -> Ctrl-S
+        case '2':
+            // Insert key sends ESC[2~ - need to consume the tilde
+            pending_key = (uint8_t)CTRL_KEY('O'); // Insert -> Ctrl-O
+            key_state = KEY_STATE_ESC_BRACKET_NUM;
+            return 0x00;
+        case '3':
+            // Delete key sends ESC[3~ - need to consume the tilde
+            pending_key = (uint8_t)CTRL_KEY('G'); // Delete -> Ctrl-G
+            key_state = KEY_STATE_ESC_BRACKET_NUM;
+            return 0x00;
+        default:
+            key_state = KEY_STATE_NORMAL;
+            return 0x00; // Ignore other sequences
+        }
+
+    case KEY_STATE_ESC_BRACKET_NUM:
+        key_state = KEY_STATE_NORMAL;
+        if (ch == '~')
+        {
+            // Return the pending key now that we've consumed the tilde
+            uint8_t result = pending_key;
+            pending_key = 0;
+            return result;
+        }
+        pending_key = 0;
+        return 0x00; // Unexpected character, ignore
+    }
+
+    key_state = KEY_STATE_NORMAL;
+    return 0x00;
+}
+
 // Terminal read function - non-blocking
 static uint8_t terminal_read(void)
 {
     uint8_t ws_ch = 0;
     if (websocket_console_try_dequeue_input(&ws_ch))
     {
-        return ws_ch;
+        uint8_t ch = (uint8_t)(ws_ch & ASCII_MASK_7BIT);
+        return process_ansi_sequence(ch);
     }
 
     int c = getchar_timeout_us(0); // Non-blocking read
@@ -36,14 +122,7 @@ static uint8_t terminal_read(void)
     }
 
     uint8_t ch = (uint8_t)(c & ASCII_MASK_7BIT);
-
-    // Map delete/backspace to Ctrl-H
-    if (ch == 0x7F || ch == '\b')
-    {
-        return (uint8_t)CTRL_KEY('H');
-    }
-
-    return ch;
+    return process_ansi_sequence(ch);
 }
 
 // Terminal write function

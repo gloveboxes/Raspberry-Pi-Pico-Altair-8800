@@ -53,7 +53,7 @@ target_link_libraries(pico_ws_server
 
 set(WIFI_SSID "" CACHE STRING "Wi-Fi network SSID for CYW43 station mode")
 set(WIFI_PASSWORD "" CACHE STRING "Wi-Fi network password for CYW43 station mode")
-option(ENABLE_INKY_DISPLAY "Enable Pimoroni Inky Pack welcome display" ON)
+option(ENABLE_INKY_DISPLAY "Enable Pimoroni Inky Pack welcome display" OFF)
 
 set(ALTAIR_SOURCES
     main.c
@@ -106,7 +106,7 @@ pico_enable_stdio_uart(altair 0)
 # Link stdlib + CYW43 (for onboard LED)
 target_link_libraries(altair
     pico_stdlib
-    pico_cyw43_arch_lwip_threadsafe_background
+    pico_cyw43_arch_lwip_poll
     pico_multicore
     pico_ws_server
     ${ALTAIR_LIBS}

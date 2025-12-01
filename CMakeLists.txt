@@ -14,9 +14,8 @@ else()
     message(STATUS "Board ${PICO_BOARD} has no WiFi - disabling WebSocket support")
 endif()
 
-# Wi-Fi credentials (only used when WebSocket is enabled)
-set(WIFI_SSID "NCW" CACHE STRING "Wi-Fi network SSID for CYW43 station mode")
-set(WIFI_PASSWORD "malolos5459" CACHE STRING "Wi-Fi network password for CYW43 station mode")
+# Wi-Fi credentials are configured at runtime via flash storage
+# Use serial console to configure credentials on boot
 
 # Propagate the option to every translation unit so IntelliSense sees it too
 add_compile_definitions(ALTAIR_ENABLE_WEBSOCKET=$<BOOL:${ALTAIR_ENABLE_WEBSOCKET}>)
@@ -43,6 +42,7 @@ set(ALTAIR_SOURCES
     PortDrivers/time_io.c
     PortDrivers/utility_io.c
     websocket_console.c
+    wifi_config.c
 )
 
 set(ALTAIR_LIBS)
@@ -104,8 +104,6 @@ if(ALTAIR_ENABLE_WEBSOCKET)
 endif()
 
 target_compile_definitions(altair PRIVATE
-    WIFI_SSID=\"${WIFI_SSID}\"
-    WIFI_PASSWORD=\"${WIFI_PASSWORD}\"
     ALTAIR_ENABLE_WEBSOCKET=$<BOOL:${ALTAIR_ENABLE_WEBSOCKET}>
 )
 
@@ -113,10 +111,12 @@ target_compile_definitions(altair PRIVATE
 pico_enable_stdio_usb(altair 1)
 pico_enable_stdio_uart(altair 0)
 
-# Link stdlib + CYW43 (for onboard LED)
+# Link stdlib + CYW43 (for onboard LED) + hardware_flash for WiFi config storage
 target_link_libraries(altair
     pico_stdlib
     pico_multicore
+    hardware_flash
+    hardware_sync
     ${ALTAIR_LIBS}
 )
 

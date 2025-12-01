@@ -7,6 +7,7 @@
 #include "Altair8800/pico_disk.h"
 #include "io_ports.h"
 #include "websocket_console.h"
+#include "wifi_config.h"
 
 #define ASCII_MASK_7BIT 0x7F
 #define CTRL_KEY(ch) ((ch) & 0x1F)
@@ -135,13 +136,36 @@ static inline uint8_t sense(void)
     return 0x00; // No sense switches on Pico
 }
 
-int main(void)
+// Initialize and configure WiFi
+static void setup_wifi(void)
 {
-    // Initialize stdio first
-    stdio_init_all();
+#if ALTAIR_ENABLE_WEBSOCKET
+    // Initialize WiFi configuration system
+    wifi_config_init();
 
-    // Give more time for USB serial to enumerate
-    sleep_ms(3000);
+    // Always offer WiFi configuration option at startup
+    if (wifi_config_exists())
+    {
+        printf("\nWiFi credentials found in flash storage.\n");
+    }
+    else
+    {
+        printf("\nNo WiFi credentials found in flash storage.\n");
+    }
+
+    // Always give user the option to configure/update WiFi
+    if (!wifi_config_prompt_and_save(15000)) // 15 second timeout
+    {
+        // User didn't configure, use existing credentials if available
+        if (wifi_config_exists())
+        {
+            printf("Using stored WiFi credentials\n");
+        }
+        else
+        {
+            printf("No WiFi credentials configured - WiFi will be unavailable\n");
+        }
+    }
 
     // Launch network task on core 1 (handles Wi-Fi init, WebSocket server, polling)
     websocket_console_start();
@@ -168,6 +192,21 @@ int main(void)
         strncpy(ip_buffer, "No network", sizeof(ip_buffer) - 1);
         printf("Wi-Fi unavailable; USB terminal only.\n");
     }
+#else
+    printf("\nBoard does not have WiFi - USB terminal only.\n");
+#endif
+}
+
+int main(void)
+{
+    // Initialize stdio first
+    stdio_init_all();
+
+    // Give more time for USB serial to enumerate
+    sleep_ms(5000);
+
+    // Initialize and configure WiFi (if board has WiFi capability)
+    setup_wifi();
 
     // Send test output
     printf("\n\n*** USB Serial Active ***\n");

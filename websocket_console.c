@@ -23,16 +23,9 @@
 #include "cyw43.h"
 
 #include "ws.h"
+#include "wifi_config.h"
 
 #include <string.h>
-
-#ifndef WIFI_SSID
-#define WIFI_SSID ""
-#endif
-
-#ifndef WIFI_PASSWORD
-#define WIFI_PASSWORD ""
-#endif
 
 #ifndef WIFI_AUTH
 #define WIFI_AUTH CYW43_AUTH_WPA2_AES_PSK
@@ -257,11 +250,26 @@ static bool websocket_console_wifi_init(void)
     }
 
     cyw43_arch_enable_sta_mode();
-    printf("[Core1] Connecting to Wi-Fi SSID '%s'...\n", WIFI_SSID);
+
+    // Load credentials from flash storage
+    char ssid[WIFI_CONFIG_SSID_MAX_LEN + 1] = {0};
+    char password[WIFI_CONFIG_PASSWORD_MAX_LEN + 1] = {0};
+    bool credentials_loaded = wifi_config_load(ssid, sizeof(ssid), password, sizeof(password));
+
+    // Check if credentials were loaded successfully
+    if (!credentials_loaded || ssid[0] == '\0')
+    {
+        printf("[Core1] No WiFi credentials configured, Wi-Fi unavailable\n");
+        return false;
+    }
+
+    printf("[Core1] Using stored credentials from flash\n");
+
+    printf("[Core1] Connecting to Wi-Fi SSID '%s'...\n", ssid);
 
     int err = cyw43_arch_wifi_connect_timeout_ms(
-        WIFI_SSID,
-        WIFI_PASSWORD,
+        ssid,
+        password,
         WIFI_AUTH,
         WIFI_CONNECT_TIMEOUT_MS);
 

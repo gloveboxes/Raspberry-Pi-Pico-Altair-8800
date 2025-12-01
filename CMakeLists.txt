@@ -1,18 +1,25 @@
 cmake_minimum_required(VERSION 3.13)
 
-# Wi-Fi credentials
-set(WIFI_SSID "" CACHE STRING "Wi-Fi network SSID for CYW43 station mode")
-set(WIFI_PASSWORD "" CACHE STRING "Wi-Fi network password for CYW43 station mode")
+# 💡 Select board BEFORE importing SDK (safer)
+if(NOT DEFINED PICO_BOARD)
+    set(PICO_BOARD "pico2_w" CACHE STRING "Target Pico board (e.g., pico, pico_w, pico2, pico2_w)" FORCE)
+endif()
 
-option(ALTAIR_ENABLE_WEBSOCKET "Enable WebSocket console and server support" ON)
+# Automatically detect if board has WiFi capabilities
+if(PICO_BOARD STREQUAL "pico_w" OR PICO_BOARD STREQUAL "pico2_w")
+    set(ALTAIR_ENABLE_WEBSOCKET ON)
+    message(STATUS "Board ${PICO_BOARD} has WiFi - enabling WebSocket support")
+else()
+    set(ALTAIR_ENABLE_WEBSOCKET OFF)
+    message(STATUS "Board ${PICO_BOARD} has no WiFi - disabling WebSocket support")
+endif()
+
+# Wi-Fi credentials (only used when WebSocket is enabled)
+set(WIFI_SSID "NCW" CACHE STRING "Wi-Fi network SSID for CYW43 station mode")
+set(WIFI_PASSWORD "malolos5459" CACHE STRING "Wi-Fi network password for CYW43 station mode")
 
 # Propagate the option to every translation unit so IntelliSense sees it too
 add_compile_definitions(ALTAIR_ENABLE_WEBSOCKET=$<BOOL:${ALTAIR_ENABLE_WEBSOCKET}>)
-
-# 💡 Select board BEFORE importing SDK (safer)
-if(NOT DEFINED PICO_BOARD)
-    set(PICO_BOARD "pico2_w" CACHE STRING "Target Pico board (e.g., pico2, pico2_w)" FORCE)
-endif()
 
 
 # Use custom mbedtls config from project root

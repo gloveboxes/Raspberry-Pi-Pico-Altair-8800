@@ -2,9 +2,9 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Build Altair (Release)",
+            "label": "Build for Pico (Release)",
             "type": "shell",
-            "command": "cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --target clean && cmake --build build -- -j && mkdir -p deploy && cp build/altair.uf2 deploy/",
+            "command": "rm -rf build && cmake -B build -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=pico && cmake --build build -- -j && mkdir -p deploy && cp build/altair.uf2 deploy/altair_pico.uf2",
             "options": {
                 "cwd": "${workspaceFolder}"
             },
@@ -17,9 +17,93 @@
             ]
         },
         {
-            "label": "Build Altair (Debug)",
+            "label": "Build for Pico W (Release)",
             "type": "shell",
-            "command": "cmake -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build -- -j",
+            "command": "rm -rf build && cmake -B build -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=pico_w && cmake --build build -- -j && mkdir -p deploy && cp build/altair.uf2 deploy/altair_pico_w.uf2",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Build for Pico 2 (Release)",
+            "type": "shell",
+            "command": "rm -rf build && cmake -B build -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=pico2 && cmake --build build -- -j && mkdir -p deploy && cp build/altair.uf2 deploy/altair_pico2.uf2",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Build for Pico 2 W (Release)",
+            "type": "shell",
+            "command": "rm -rf build && cmake -B build -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=pico2_w && cmake --build build -- -j && mkdir -p deploy && cp build/altair.uf2 deploy/altair_pico2_w.uf2",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Build All Boards (Release)",
+            "type": "shell",
+            "command": "./build_all_boards.sh && mkdir -p deploy && cp tests/pico/altair_pico.uf2 deploy/ && cp tests/pico_w/altair_pico_w.uf2 deploy/ && cp tests/pico2/altair_pico2.uf2 deploy/ && cp tests/pico2_w/altair_pico2_w.uf2 deploy/",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Build for Pico (Debug)",
+            "type": "shell",
+            "command": "rm -rf build && cmake -B build -DCMAKE_BUILD_TYPE=Debug -DPICO_BOARD=pico && cmake --build build -- -j",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Build for Pico W (Debug)",
+            "type": "shell",
+            "command": "rm -rf build && cmake -B build -DCMAKE_BUILD_TYPE=Debug -DPICO_BOARD=pico_w && cmake --build build -- -j",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Build for Pico 2 (Debug)",
+            "type": "shell",
+            "command": "rm -rf build && cmake -B build -DCMAKE_BUILD_TYPE=Debug -DPICO_BOARD=pico2 && cmake --build build -- -j",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Build for Pico 2 W (Debug)",
+            "type": "shell",
+            "command": "rm -rf build && cmake -B build -DCMAKE_BUILD_TYPE=Debug -DPICO_BOARD=pico2_w && cmake --build build -- -j",
             "options": {
                 "cwd": "${workspaceFolder}"
             },

@@ -93,9 +93,44 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
-## Building App
+## Building for Different Boards
 
-There are two build tasks
+WebSocket support is automatically enabled for WiFi-capable boards (`pico_w` and `pico2_w`) and disabled for non-WiFi boards (`pico` and `pico2`). You can build for specific boards using VS Code tasks:
 
-1. Build Altair (Release): Default build task, does clean then build.
-2. Build Altair (Debug)L Create a debug build.
+### Available Build Tasks
+
+**Individual Board Builds:**
+- **Build for Pico (Release)** - Raspberry Pi Pico (no WiFi)
+- **Build for Pico W (Release)** - Raspberry Pi Pico W (with WiFi/WebSocket)
+- **Build for Pico 2 (Release)** - Raspberry Pi Pico 2 (no WiFi)
+- **Build for Pico 2 W (Release)** - Raspberry Pi Pico 2 W (with WiFi/WebSocket) *[Default]*
+- **Build All Boards (Release)** - Builds for all supported boards
+
+**General Build Tasks:**
+1. **Build Altair (Release)** - Default build task, builds for the board set in CMakeLists.txt (currently `pico2_w`)
+2. **Build Altair (Debug)** - Create a debug build
+
+### Running Build Tasks
+
+1. Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac)
+2. Type "Run Task" or "Tasks: Run Task"
+3. Select the desired build task
+
+Build artifacts are saved to:
+- Individual board builds: `deploy/altair_{board}.uf2`
+- All boards build: `tests/{board}/altair_{board}.uf2`
+
+### Manual Build Commands
+
+You can also build for specific boards from the command line:
+
+```shell
+# Build for Pico W
+rm -rf build && cmake -B build -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=pico_w && cmake --build build -- -j
+
+# Build for Pico 2
+rm -rf build && cmake -B build -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=pico2 && cmake --build build -- -j
+
+# Build for all boards
+./build_all_boards.sh
+```

@@ -31,7 +31,7 @@ fi
 echo ""
 
 # Array of boards to test
-BOARDS=("pico" "pico_w" "pico2" "pico2_w")
+BOARDS=("pico" "pico_w" "pico2" "pico2_w" "pimoroni_pico_plus2_w_rp2350")
 
 # Create tests directory
 TESTS_DIR="${SCRIPT_DIR}/tests"

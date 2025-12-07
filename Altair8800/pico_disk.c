@@ -21,9 +21,16 @@ static const uint8_t STATUS_DEFAULT = STATUS_ENWD | STATUS_MOVE_HEAD |
                                       STATUS_HEAD | STATUS_IE |
                                       STATUS_TRACK_0 | STATUS_NRDA;
 
+// Hash function for sector index (fast bitwise AND for modulo)
+static inline uint8_t hash_sector(uint16_t index)
+{
+    return (uint8_t)(index & (PATCH_HASH_SIZE - 1));
+}
+
 static sector_patch_t *find_patch(pico_disk_t *disk, uint16_t index)
 {
-    sector_patch_t *node = disk->patches;
+    uint8_t bucket = hash_sector(index);
+    sector_patch_t *node = disk->patch_hash[bucket];
     while (node) {
         if (node->index == index) {
             return node;
@@ -35,13 +42,15 @@ static sector_patch_t *find_patch(pico_disk_t *disk, uint16_t index)
 
 static void clear_patches(pico_disk_t *disk)
 {
-    sector_patch_t *node = disk->patches;
-    while (node) {
-        sector_patch_t *next = node->next;
-        free(node);
-        node = next;
+    for (uint8_t i = 0; i < PATCH_HASH_SIZE; i++) {
+        sector_patch_t *node = disk->patch_hash[i];
+        while (node) {
+            sector_patch_t *next = node->next;
+            free(node);
+            node = next;
+        }
+        disk->patch_hash[i] = NULL;
     }
-    disk->patches = NULL;
 }
 
 static sector_patch_t *get_patch(pico_disk_t *disk, uint16_t index)
@@ -56,8 +65,9 @@ static sector_patch_t *get_patch(pico_disk_t *disk, uint16_t index)
         return NULL;
     }
     node->index = index;
-    node->next = disk->patches;
-    disk->patches = node;
+    uint8_t bucket = hash_sector(index);
+    node->next = disk->patch_hash[bucket];
+    disk->patch_hash[bucket] = node;
     memset(node->data, 0, SECTOR_SIZE);
     return node;
 }
@@ -109,7 +119,7 @@ void pico_disk_init(void)
         pico_disk_controller.disk[i].sector = 0;
         pico_disk_controller.disk[i].disk_loaded = false;
         pico_disk_controller.disk[i].disk_image_flash = NULL;
-        pico_disk_controller.disk[i].patches = NULL;
+        memset(pico_disk_controller.disk[i].patch_hash, 0, sizeof(pico_disk_controller.disk[i].patch_hash));
     }
     
     // Select drive 0 by default
@@ -139,7 +149,7 @@ bool pico_disk_load(uint8_t drive, const uint8_t *disk_image, uint32_t size)
     disk->sector_dirty = false;
     disk->have_sector_data = false;
     disk->write_status = 0;
-    disk->patches = NULL;
+    memset(disk->patch_hash, 0, sizeof(disk->patch_hash));
     
     // Start from default hardware reset value, then reflect initial state
     disk->status = STATUS_DEFAULT;

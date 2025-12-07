@@ -15,6 +15,7 @@
 
 // Include the CPM disk image
 #include "Disks/cpm63k_disk.h"
+#include "Disks/blank_disk.h"
 
 // Global CPU instance
 static intel8080_t cpu;
@@ -127,7 +128,7 @@ static uint8_t terminal_read(void)
 static void terminal_write(uint8_t c)
 {
     c &= ASCII_MASK_7BIT; // Take first 7 bits only
-    putchar(c);
+    // putchar(c);
     websocket_console_enqueue_output(c);
 }
 
@@ -264,6 +265,18 @@ int main(void)
     else
     {
         printf("DISK_A initialization failed!\n");
+        return -1;
+    }
+
+    // Load blank disk image into drive 1 (DISK_B)
+    printf("Opening DISK_B: blank.dsk\n");
+    if (pico_disk_load(1, blank_disk, blank_disk_len))
+    {
+        printf("DISK_B opened successfully (%u bytes)\n", blank_disk_len);
+    }
+    else
+    {
+        printf("DISK_B initialization failed!\n");
         return -1;
     }
 

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.13)
 
 # 💡 Select board BEFORE importing SDK (safer)
 if(NOT DEFINED PICO_BOARD)
-    set(PICO_BOARD "pico2_w" CACHE STRING "Target Pico board (e.g., pico, pico_w, pico2, pico2_w)" FORCE)
+    set(PICO_BOARD "pico2_w" CACHE STRING "Target Pico board (e.g., pico, pico_w, pico2, pico2_w, pimoroni_pico_plus2_w_rp2350)" FORCE)
 endif()
 
 # Wi-Fi credentials are configured at runtime via flash storage

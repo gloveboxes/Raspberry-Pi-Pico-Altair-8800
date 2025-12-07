@@ -169,7 +169,6 @@ extern "C"
             return;
         }
         
-        printf("WebSocket sending %zu bytes\n", payload_len);
         if (!g_ws_server->broadcastMessage(payload, payload_len))
         {
             // Send failed - likely due to full send buffer or network congestion

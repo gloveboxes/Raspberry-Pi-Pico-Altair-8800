@@ -38,6 +38,9 @@
 #define DRIVE_SELECT_MASK   0x0F
 #define SECTOR_SHIFT_BITS   1
 
+// Hash table size for sector patches (power of 2 for fast modulo)
+#define PATCH_HASH_SIZE     32
+
 typedef struct sector_patch {
     uint16_t index;
     struct sector_patch *next;
@@ -58,7 +61,7 @@ typedef struct
     bool sector_dirty;          // Sector needs writing back
     bool have_sector_data;      // Sector buffer is valid
     bool disk_loaded;           // Disk image is loaded
-    sector_patch_t *patches;    // Linked list of modified sectors
+    sector_patch_t *patch_hash[PATCH_HASH_SIZE];  // Hash table of modified sectors
 } pico_disk_t;
 
 typedef struct

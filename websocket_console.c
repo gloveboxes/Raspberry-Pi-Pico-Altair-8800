@@ -13,7 +13,7 @@
 #include "pico/cyw43_arch.h"
 #include "pico/multicore.h"
 #include "pico/util/queue.h"
-#include "pico/sync.h"
+#include "pico/mutex.h"
 
 #include "lwip/ip4_addr.h"
 #include "lwip/netif.h"
@@ -36,8 +36,7 @@ static queue_t ws_rx_queue;
 static uint8_t ws_tx_buffer[WS_TX_BUFFER_SIZE];
 static size_t ws_tx_head = 0;
 static size_t ws_tx_tail = 0;
-static critical_section_t ws_tx_lock;
-static bool ws_tx_lock_initialized = false;
+static mutex_t ws_tx_lock;
 static volatile bool console_initialized = false;
 static volatile bool console_running = false;
 static volatile bool wifi_connected = false;
@@ -62,27 +61,17 @@ static inline size_t websocket_console_tx_advance(size_t index, size_t count)
     return index;
 }
 
-static void websocket_console_tx_init(void)
+void websocket_console_tx_init(void)
 {
-    if (!ws_tx_lock_initialized)
-    {
-        critical_section_init(&ws_tx_lock);
-        ws_tx_lock_initialized = true;
-    }
-    critical_section_enter_blocking(&ws_tx_lock);
+    mutex_enter_blocking(&ws_tx_lock);
     ws_tx_head = 0;
     ws_tx_tail = 0;
-    critical_section_exit(&ws_tx_lock);
+    mutex_exit(&ws_tx_lock);
 }
 
 static void websocket_console_tx_push(uint8_t value)
 {
-    if (!ws_tx_lock_initialized)
-    {
-        websocket_console_tx_init();
-    }
-
-    critical_section_enter_blocking(&ws_tx_lock);
+    mutex_enter_blocking(&ws_tx_lock);
 
     size_t next_head = websocket_console_tx_advance(ws_tx_head, 1);
     if (next_head == ws_tx_tail)
@@ -94,17 +83,17 @@ static void websocket_console_tx_push(uint8_t value)
     ws_tx_buffer[ws_tx_head] = value;
     ws_tx_head = next_head;
 
-    critical_section_exit(&ws_tx_lock);
+    mutex_exit(&ws_tx_lock);
 }
 
 static size_t websocket_console_tx_pop(uint8_t *buffer, size_t max_len)
 {
-    if (!buffer || max_len == 0 || !ws_tx_lock_initialized)
+    if (!buffer || max_len == 0)
     {
         return 0;
     }
 
-    critical_section_enter_blocking(&ws_tx_lock);
+    mutex_enter_blocking(&ws_tx_lock);
 
     size_t total_copied = 0;
     while (total_copied < max_len && ws_tx_tail != ws_tx_head)
@@ -123,44 +112,16 @@ static size_t websocket_console_tx_pop(uint8_t *buffer, size_t max_len)
         ws_tx_tail = websocket_console_tx_advance(ws_tx_tail, to_copy);
     }
 
-    critical_section_exit(&ws_tx_lock);
+    mutex_exit(&ws_tx_lock);
     return total_copied;
 }
 
 static void websocket_console_clear_tx_buffer(void)
 {
-    if (!ws_tx_lock_initialized)
-    {
-        websocket_console_tx_init();
-        return;
-    }
-
-    critical_section_enter_blocking(&ws_tx_lock);
+    mutex_enter_blocking(&ws_tx_lock);
     ws_tx_head = 0;
     ws_tx_tail = 0;
-    critical_section_exit(&ws_tx_lock);
-}
-
-static void websocket_console_init(void)
-{
-    if (console_initialized)
-    {
-        return;
-    }
-
-    queue_init(&ws_rx_queue, sizeof(uint8_t), WS_RX_QUEUE_DEPTH);
-    websocket_console_tx_init();
-
-    ws_callbacks_t callbacks = {
-        .on_receive = websocket_console_handle_input,
-        .on_output = NULL,
-        .on_client_connected = websocket_console_on_client_connected,
-        .on_client_disconnected = websocket_console_on_client_disconnected,
-        .user_data = NULL,
-    };
-    ws_init(&callbacks);
-
-    console_initialized = true;
+    mutex_exit(&ws_tx_lock);
 }
 
 void websocket_console_start(void)
@@ -170,10 +131,9 @@ void websocket_console_start(void)
         return;
     }
 
-    // Initialize queues on core 0 before launching core 1
+    // Initialize mutex and queues on core 0 before launching core 1
+    mutex_init(&ws_tx_lock);
     queue_init(&ws_rx_queue, sizeof(uint8_t), WS_RX_QUEUE_DEPTH);
-    websocket_console_tx_init();
-    console_initialized = true;
 
     // Launch core 1 which will handle all Wi-Fi and WebSocket operations
     multicore_launch_core1(websocket_console_core1_entry);
@@ -335,6 +295,8 @@ static void websocket_console_core1_entry(void)
         return;
     }
 
+    // Mark console as initialized only after successful network stack initialization
+    console_initialized = true;
     printf("[Core1] WebSocket server running, entering poll loop\n");
 
     // Main poll loop - all CYW43/lwIP access stays on core 1

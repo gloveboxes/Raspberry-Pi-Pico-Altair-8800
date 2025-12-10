@@ -32,7 +32,7 @@ volatile bool wifi_connected = false;
 
 char ip_address_buffer[32] = {0};
 
-static bool websocket_console_wifi_init(void)
+static bool wifi_init(void)
 {
     printf("[Core1] Initializing CYW43...\n");
     if (cyw43_arch_init())
@@ -101,7 +101,7 @@ void websocket_console_start(void)
     printf("Launched network task on core 1\n");
 }
 
-uint32_t websocket_console_wait_for_wifi(void)
+uint32_t wait_for_wifi(void)
 {
     // Block until core 1 signals Wi-Fi init complete
     // Returns 0 on failure, or raw 32-bit IP address on success
@@ -113,28 +113,10 @@ bool websocket_console_is_running(void)
     return console_running && wifi_connected && ws_is_running();
 }
 
-bool websocket_console_get_ip(char *buffer, size_t length)
-{
-    if (!wifi_connected || !buffer || length == 0)
-    {
-        return false;
-    }
-
-    size_t ip_len = strlen(ip_address_buffer);
-    if (ip_len == 0 || ip_len >= length)
-    {
-        return false;
-    }
-
-    strncpy(buffer, ip_address_buffer, length - 1);
-    buffer[length - 1] = '\0';
-    return true;
-}
-
 static void websocket_console_core1_entry(void)
 {
     // Initialize Wi-Fi on core 1
-    bool wifi_ok = websocket_console_wifi_init();
+    bool wifi_ok = wifi_init();
     wifi_connected = wifi_ok;
 
     // Signal core 0: send 0 for failure, or raw IP address (32-bit) for success
@@ -160,16 +142,7 @@ static void websocket_console_core1_entry(void)
     }
 
     // Initialize and start WebSocket server
-    ws_callbacks_t callbacks = {
-        .on_receive = websocket_console_handle_input,
-        .on_output = websocket_console_supply_output,
-        .on_client_connected = websocket_console_on_client_connected,
-        .on_client_disconnected = websocket_console_on_client_disconnected,
-        .user_data = NULL,
-    };
-    ws_init(&callbacks);
-
-    if (!ws_start())
+    if (!websocket_console_init_server())
     {
         printf("[Core1] Failed to start WebSocket server\n");
         return;
@@ -196,20 +169,13 @@ void websocket_console_start(void)
     printf("WebSocket console disabled; USB serial only.\n");
 }
 
-uint32_t websocket_console_wait_for_wifi(void)
+uint32_t wait_for_wifi(void)
 {
     return 0;
 }
 
 bool websocket_console_is_running(void)
 {
-    return false;
-}
-
-bool websocket_console_get_ip(char *buffer, size_t length)
-{
-    (void)buffer;
-    (void)length;
     return false;
 }
 

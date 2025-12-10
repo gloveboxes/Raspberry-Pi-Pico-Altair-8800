@@ -177,7 +177,7 @@ static void setup_wifi(void)
     // Wait for core 1 to complete Wi-Fi initialization
     // Returns 0 on failure, or raw 32-bit IP address on success
     printf("Waiting for Wi-Fi initialization on core 1...\n");
-    uint32_t ip_raw = websocket_console_wait_for_wifi();
+    uint32_t ip_raw = wait_for_wifi();
     char ip_buffer[32] = {0};
     bool wifi_ok = (ip_raw != 0);
 

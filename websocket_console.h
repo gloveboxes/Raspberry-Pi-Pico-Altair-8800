@@ -17,9 +17,6 @@ bool websocket_console_try_dequeue_input(uint8_t *value);
 // Check if the console is running and Wi-Fi is connected.
 bool websocket_console_is_running(void);
 
-// Get the IP address string (valid after Wi-Fi connects). Returns false if not ready.
-bool websocket_console_get_ip(char *buffer, size_t length);
-
 // Forward declarations for internal functions
 void ws_poll_incoming(void);
 void ws_poll_outgoing(void);
@@ -37,6 +34,9 @@ static inline void ws_poll(int *counter)
 
 // Initialize WebSocket queues (internal use)
 void websocket_queue_init(void);
+
+// Initialize and start the WebSocket server (returns true on success)
+bool websocket_console_init_server(void);
 
 // WebSocket callback functions (internal use)
 bool websocket_console_handle_input(const uint8_t *payload, size_t payload_len, void *user_data);

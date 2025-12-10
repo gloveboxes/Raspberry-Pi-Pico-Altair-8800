@@ -10,7 +10,7 @@ namespace
 {
     static constexpr uint16_t WS_SERVER_PORT = 8088;
     static constexpr uint32_t WS_MAX_CLIENTS = 1;
-    static constexpr size_t WS_FRAME_PAYLOAD = 128;
+    static constexpr size_t WS_FRAME_PAYLOAD = 256;
 
     struct ws_context_t
     {
@@ -168,7 +168,7 @@ extern "C"
         {
             return;
         }
-        
+        // printf("WebSocket sending %zu bytes\n", payload_len);
         if (!g_ws_server->broadcastMessage(payload, payload_len))
         {
             // Send failed - likely due to full send buffer or network congestion

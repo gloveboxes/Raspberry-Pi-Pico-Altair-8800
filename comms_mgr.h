@@ -5,4 +5,4 @@
 #include "websocket_console.h"
 
 void websocket_console_start(void);
-uint32_t websocket_console_wait_for_wifi(void);
+uint32_t wait_for_wifi(void);

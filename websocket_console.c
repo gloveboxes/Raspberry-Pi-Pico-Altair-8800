@@ -17,52 +17,46 @@
 #if defined(CYW43_WL_GPIO_LED_PIN)
 
 #define WS_RX_QUEUE_DEPTH 128
-#define WS_TX_BUFFER_SIZE 1024
+#define WS_TX_QUEUE_DEPTH 512
 
 static queue_t ws_rx_queue;
-static uint8_t ws_tx_buffer[WS_TX_BUFFER_SIZE];
-static size_t ws_tx_head = 0;
-static size_t ws_tx_tail = 0;
-static mutex_t ws_tx_lock;
+static queue_t ws_tx_queue;
 
 static void websocket_console_clear_tx_buffer(void);
 static void websocket_console_clear_queues(void);
 
-static inline size_t websocket_console_tx_advance(size_t index, size_t count)
-{
-    index += count;
-    if (index >= WS_TX_BUFFER_SIZE)
-    {
-        index -= WS_TX_BUFFER_SIZE;
-    }
-    return index;
-}
-
-void websocket_console_tx_init(void)
-{
-    mutex_enter_blocking(&ws_tx_lock);
-    ws_tx_head = 0;
-    ws_tx_tail = 0;
-    mutex_exit(&ws_tx_lock);
-}
-
+/**
+ * @brief Pushes a byte into the WebSocket console transmit buffer.
+ * 
+ * Adds a byte to the TX queue. If the queue is full,
+ * the oldest byte is discarded to make room for the new one.
+ * Thread-safe, uses Pico SDK queue.
+ * 
+ * @param value Byte to add to the transmit buffer
+ */
 static void websocket_console_tx_push(uint8_t value)
 {
-    mutex_enter_blocking(&ws_tx_lock);
-
-    size_t next_head = websocket_console_tx_advance(ws_tx_head, 1);
-    if (next_head == ws_tx_tail)
+    if (!queue_try_add(&ws_tx_queue, &value))
     {
-        // Buffer full, drop oldest byte to make room
-        ws_tx_tail = websocket_console_tx_advance(ws_tx_tail, 1);
+        // Queue full, drop oldest byte to make room
+        uint8_t discard = 0;
+        if (queue_try_remove(&ws_tx_queue, &discard))
+        {
+            queue_try_add(&ws_tx_queue, &value);
+        }
     }
-
-    ws_tx_buffer[ws_tx_head] = value;
-    ws_tx_head = next_head;
-
-    mutex_exit(&ws_tx_lock);
 }
 
+/**
+ * @brief Pops bytes from the WebSocket console transmit buffer.
+ * 
+ * Retrieves up to max_len bytes from the TX queue.
+ * Thread-safe, uses Pico SDK queue.
+ * 
+ * @param buffer Destination buffer for retrieved bytes
+ * @param max_len Maximum number of bytes to retrieve
+ * @return size_t Number of bytes actually retrieved
+ */
 static size_t websocket_console_tx_pop(uint8_t *buffer, size_t max_len)
 {
     if (!buffer || max_len == 0)
@@ -70,45 +64,71 @@ static size_t websocket_console_tx_pop(uint8_t *buffer, size_t max_len)
         return 0;
     }
 
-    mutex_enter_blocking(&ws_tx_lock);
-
-    size_t total_copied = 0;
-    while (total_copied < max_len && ws_tx_tail != ws_tx_head)
+    size_t count = 0;
+    while (count < max_len && queue_try_remove(&ws_tx_queue, &buffer[count]))
     {
-        size_t contiguous = (ws_tx_head > ws_tx_tail)
-                                ? (ws_tx_head - ws_tx_tail)
-                                : (WS_TX_BUFFER_SIZE - ws_tx_tail);
-        size_t to_copy = max_len - total_copied;
-        if (to_copy > contiguous)
-        {
-            to_copy = contiguous;
-        }
-
-        memcpy(&buffer[total_copied], &ws_tx_buffer[ws_tx_tail], to_copy);
-        total_copied += to_copy;
-        ws_tx_tail = websocket_console_tx_advance(ws_tx_tail, to_copy);
+        count++;
     }
 
-    mutex_exit(&ws_tx_lock);
-    return total_copied;
+    return count;
 }
 
+/**
+ * @brief Clears the WebSocket console transmit buffer.
+ * 
+ * Removes all pending bytes from the TX queue.
+ */
 static void websocket_console_clear_tx_buffer(void)
 {
-    mutex_enter_blocking(&ws_tx_lock);
-    ws_tx_head = 0;
-    ws_tx_tail = 0;
-    mutex_exit(&ws_tx_lock);
+    uint8_t discard = 0;
+    while (queue_try_remove(&ws_tx_queue, &discard))
+    {
+    }
 }
 
+/**
+ * @brief Initializes the WebSocket console queues and synchronization primitives.
+ * 
+ * Sets up the TX and RX queues. Must be called on core 0
+ * before launching core 1 to ensure proper multi-core synchronization.
+ */
 void websocket_queue_init(void)
 {
-
-    // Initialize mutex and queues on core 0 before launching core 1
-    mutex_init(&ws_tx_lock);
+    // Initialize queues on core 0 before launching core 1
+    queue_init(&ws_tx_queue, sizeof(uint8_t), WS_TX_QUEUE_DEPTH);
     queue_init(&ws_rx_queue, sizeof(uint8_t), WS_RX_QUEUE_DEPTH);
 }
 
+/**
+ * @brief Initializes and starts the WebSocket server.
+ * 
+ * Sets up WebSocket callbacks and starts the server.
+ * Should be called after WiFi is connected.
+ * 
+ * @return true if server started successfully, false otherwise
+ */
+bool websocket_console_init_server(void)
+{
+    ws_callbacks_t callbacks = {
+        .on_receive = websocket_console_handle_input,
+        .on_output = websocket_console_supply_output,
+        .on_client_connected = websocket_console_on_client_connected,
+        .on_client_disconnected = websocket_console_on_client_disconnected,
+        .user_data = NULL,
+    };
+    ws_init(&callbacks);
+
+    return ws_start();
+}
+
+/**
+ * @brief Enqueues a byte for transmission to WebSocket clients.
+ * 
+ * Adds a byte to the TX buffer for sending to connected WebSocket clients.
+ * If no clients are connected, clears the buffer instead to prevent accumulation.
+ * 
+ * @param value Byte to transmit to WebSocket clients
+ */
 void websocket_console_enqueue_output(uint8_t value)
 {
     if (!ws_has_active_clients())
@@ -120,11 +140,31 @@ void websocket_console_enqueue_output(uint8_t value)
     websocket_console_tx_push(value);
 }
 
+/**
+ * @brief Attempts to dequeue a byte from the WebSocket input buffer.
+ * 
+ * Non-blocking attempt to retrieve a byte received from WebSocket clients.
+ * 
+ * @param value Pointer to store the retrieved byte
+ * @return true if a byte was successfully retrieved, false if queue is empty
+ */
 bool websocket_console_try_dequeue_input(uint8_t *value)
 {
     return queue_try_remove(&ws_rx_queue, value);
 }
 
+/**
+ * @brief Handles incoming WebSocket input data.
+ * 
+ * Processes bytes received from WebSocket clients and adds them to the RX queue.
+ * Converts newline characters (\n) to carriage returns (\r).
+ * If the queue is full, discards the oldest byte to make room.
+ * 
+ * @param payload Pointer to incoming data bytes
+ * @param payload_len Number of bytes in the payload
+ * @param user_data User-defined context (unused)
+ * @return true if processing succeeded, false if payload is NULL
+ */
 bool websocket_console_handle_input(const uint8_t *payload, size_t payload_len, void *user_data)
 {
     (void)user_data;
@@ -154,17 +194,39 @@ bool websocket_console_handle_input(const uint8_t *payload, size_t payload_len, 
     return true;
 }
 
+/**
+ * @brief Callback invoked when a WebSocket client connects.
+ * 
+ * Currently performs no operations but provides a hook for future
+ * connection handling logic.
+ * 
+ * @param user_data User-defined context (unused)
+ */
 void websocket_console_on_client_connected(void *user_data)
 {
     (void)user_data;
 }
 
+/**
+ * @brief Callback invoked when a WebSocket client disconnects.
+ * 
+ * Clears both TX and RX queues to reset console state when
+ * the client connection is lost.
+ * 
+ * @param user_data User-defined context (unused)
+ */
 void websocket_console_on_client_disconnected(void *user_data)
 {
     (void)user_data;
     websocket_console_clear_queues();
 }
 
+/**
+ * @brief Clears both TX and RX queues.
+ * 
+ * Empties the transmit buffer and removes all pending bytes
+ * from the receive queue.
+ */
 static void websocket_console_clear_queues(void)
 {
     websocket_console_clear_tx_buffer();
@@ -175,6 +237,17 @@ static void websocket_console_clear_queues(void)
     }
 }
 
+/**
+ * @brief Supplies output data to be sent to WebSocket clients.
+ * 
+ * Called by the WebSocket server to retrieve bytes from the TX buffer
+ * for transmission to connected clients.
+ * 
+ * @param buffer Destination buffer for output data
+ * @param max_len Maximum number of bytes to retrieve
+ * @param user_data User-defined context (unused)
+ * @return size_t Number of bytes placed in the buffer
+ */
 size_t websocket_console_supply_output(uint8_t *buffer, size_t max_len, void *user_data)
 {
     (void)user_data;
@@ -183,11 +256,32 @@ size_t websocket_console_supply_output(uint8_t *buffer, size_t max_len, void *us
 
 #else // No WiFi capability
 
+/**
+ * @brief Stub for initializing WebSocket server when WiFi is not available.
+ * 
+ * @return false Always returns false (no WiFi capability)
+ */
+bool websocket_console_init_server(void)
+{
+    return false;
+}
+
+/**
+ * @brief Stub for enqueuing output when WiFi is not available.
+ * 
+ * @param value Unused byte value
+ */
 void websocket_console_enqueue_output(uint8_t value)
 {
     (void)value;
 }
 
+/**
+ * @brief Stub for dequeuing input when WiFi is not available.
+ * 
+ * @param value Unused pointer
+ * @return false Always returns false (no input available)
+ */
 bool websocket_console_try_dequeue_input(uint8_t *value)
 {
     (void)value;

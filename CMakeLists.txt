@@ -122,6 +122,7 @@ pico_enable_stdio_uart(altair 0)
 target_link_libraries(altair
     pico_stdlib
     pico_multicore
+    pico_rand
     hardware_flash
     hardware_sync
     ${ALTAIR_LIBS}

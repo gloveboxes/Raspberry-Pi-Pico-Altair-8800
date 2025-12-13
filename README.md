@@ -197,3 +197,8 @@ brew install ninja
 
 [Raspberry Pi Pico](https://marketplace.visualstudio.com/items?itemName=raspberry-pi.raspberry-pi-pico)
 
+## CLang Formatter
+
+```shell
+brew install clang-format
+```

@@ -77,7 +77,7 @@ cmake -B build -DPICO_BOARD=pico2 [...other flags...]
 2. Run the following command
 
     ```shell
-    python3 dsk_to_header.py --input cpm63k.dsk --output Altair8800/cpm63k_disk.h --symbol cpm63k_dsk
+    python3 dsk_to_header.py --input cpm63k.dsk --output cpm63k_disk.h --symbol cpm63k_dsk
     ```
 
 3. Copy the .h file to the Altair8800 folder

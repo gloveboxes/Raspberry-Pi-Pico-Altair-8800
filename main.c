@@ -1,30 +1,30 @@
-#include "pico/stdlib.h"
-#include "pico/error.h"
-#include <stdio.h>
-#include <string.h>
 #include "Altair8800/intel8080.h"
 #include "Altair8800/memory.h"
 #include "Altair8800/pico_disk.h"
-#include "io_ports.h"
-#include "comms_mgr.h"
-#include "wifi_config.h"
 #include "build_version.h"
+#include "comms_mgr.h"
+#include "io_ports.h"
+#include "pico/error.h"
+#include "pico/stdlib.h"
+#include "wifi_config.h"
+#include <stdio.h>
+#include <string.h>
 
 #define ASCII_MASK_7BIT 0x7F
 #define CTRL_KEY(ch) ((ch) & 0x1F)
 
 // Include the CPM disk image
-#include "Disks/cpm63k_disk.h"
 #include "Disks/blank_disk.h"
+#include "Disks/cpm63k_disk.h"
 
 // Global CPU instance
 static intel8080_t cpu;
 
 typedef enum
 {
-	CPU_RUNNING = 1,
-	CPU_STOPPED = 2,
-	CPU_LOW_POWER = 3
+    CPU_RUNNING = 1,
+    CPU_STOPPED = 2,
+    CPU_LOW_POWER = 3
 } CPU_OPERATING_MODE;
 
 static volatile CPU_OPERATING_MODE cpu_mode = CPU_STOPPED;
@@ -52,68 +52,68 @@ static uint8_t process_ansi_sequence(uint8_t ch)
 
     switch (key_state)
     {
-    case KEY_STATE_NORMAL:
-        if (ch == 0x1B)
-        {
-            key_state = KEY_STATE_ESC;
-            return 0x00; // Start of escape sequence
-        }
-        if (ch == 0x7F || ch == 0x08)
-        {
-            return (uint8_t)CTRL_KEY('H'); // Map delete/backspace to Ctrl-H (0x08)
-        }
-        return ch;
+        case KEY_STATE_NORMAL:
+            if (ch == 0x1B)
+            {
+                key_state = KEY_STATE_ESC;
+                return 0x00; // Start of escape sequence
+            }
+            if (ch == 0x7F || ch == 0x08)
+            {
+                return (uint8_t)CTRL_KEY('H'); // Map delete/backspace to Ctrl-H (0x08)
+            }
+            return ch;
 
-    case KEY_STATE_ESC:
-        if (ch == '[')
-        {
-            key_state = KEY_STATE_ESC_BRACKET;
-            return 0x00; // Control sequence introducer
-        }
-        key_state = KEY_STATE_NORMAL;
-        return ch; // Pass through unknown sequences
+        case KEY_STATE_ESC:
+            if (ch == '[')
+            {
+                key_state = KEY_STATE_ESC_BRACKET;
+                return 0x00; // Control sequence introducer
+            }
+            key_state = KEY_STATE_NORMAL;
+            return ch; // Pass through unknown sequences
 
-    case KEY_STATE_ESC_BRACKET:
-        switch (ch)
-        {
-        case 'A':
-            key_state = KEY_STATE_NORMAL;
-            return (uint8_t)CTRL_KEY('E'); // Up -> Ctrl-E
-        case 'B':
-            key_state = KEY_STATE_NORMAL;
-            return (uint8_t)CTRL_KEY('X'); // Down -> Ctrl-X
-        case 'C':
-            key_state = KEY_STATE_NORMAL;
-            return (uint8_t)CTRL_KEY('D'); // Right -> Ctrl-D
-        case 'D':
-            key_state = KEY_STATE_NORMAL;
-            return (uint8_t)CTRL_KEY('S'); // Left -> Ctrl-S
-        case '2':
-            // Insert key sends ESC[2~ - need to consume the tilde
-            pending_key = (uint8_t)CTRL_KEY('O'); // Insert -> Ctrl-O
-            key_state = KEY_STATE_ESC_BRACKET_NUM;
-            return 0x00;
-        case '3':
-            // Delete key sends ESC[3~ - need to consume the tilde
-            pending_key = (uint8_t)CTRL_KEY('G'); // Delete -> Ctrl-G
-            key_state = KEY_STATE_ESC_BRACKET_NUM;
-            return 0x00;
-        default:
-            key_state = KEY_STATE_NORMAL;
-            return 0x00; // Ignore other sequences
-        }
+        case KEY_STATE_ESC_BRACKET:
+            switch (ch)
+            {
+                case 'A':
+                    key_state = KEY_STATE_NORMAL;
+                    return (uint8_t)CTRL_KEY('E'); // Up -> Ctrl-E
+                case 'B':
+                    key_state = KEY_STATE_NORMAL;
+                    return (uint8_t)CTRL_KEY('X'); // Down -> Ctrl-X
+                case 'C':
+                    key_state = KEY_STATE_NORMAL;
+                    return (uint8_t)CTRL_KEY('D'); // Right -> Ctrl-D
+                case 'D':
+                    key_state = KEY_STATE_NORMAL;
+                    return (uint8_t)CTRL_KEY('S'); // Left -> Ctrl-S
+                case '2':
+                    // Insert key sends ESC[2~ - need to consume the tilde
+                    pending_key = (uint8_t)CTRL_KEY('O'); // Insert -> Ctrl-O
+                    key_state = KEY_STATE_ESC_BRACKET_NUM;
+                    return 0x00;
+                case '3':
+                    // Delete key sends ESC[3~ - need to consume the tilde
+                    pending_key = (uint8_t)CTRL_KEY('G'); // Delete -> Ctrl-G
+                    key_state = KEY_STATE_ESC_BRACKET_NUM;
+                    return 0x00;
+                default:
+                    key_state = KEY_STATE_NORMAL;
+                    return 0x00; // Ignore other sequences
+            }
 
-    case KEY_STATE_ESC_BRACKET_NUM:
-        key_state = KEY_STATE_NORMAL;
-        if (ch == '~')
-        {
-            // Return the pending key now that we've consumed the tilde
-            uint8_t result = pending_key;
+        case KEY_STATE_ESC_BRACKET_NUM:
+            key_state = KEY_STATE_NORMAL;
+            if (ch == '~')
+            {
+                // Return the pending key now that we've consumed the tilde
+                uint8_t result = pending_key;
+                pending_key = 0;
+                return result;
+            }
             pending_key = 0;
-            return result;
-        }
-        pending_key = 0;
-        return 0x00; // Unexpected character, ignore
+            return 0x00; // Unexpected character, ignore
     }
 
     key_state = KEY_STATE_NORMAL;
@@ -199,10 +199,8 @@ static void setup_wifi(void)
     if (wifi_ok)
     {
         // Convert raw IP to dotted-decimal string
-        snprintf(ip_buffer, sizeof(ip_buffer), "%lu.%lu.%lu.%lu",
-                 (unsigned long)(ip_raw & 0xFF),
-                 (unsigned long)((ip_raw >> 8) & 0xFF),
-                 (unsigned long)((ip_raw >> 16) & 0xFF),
+        snprintf(ip_buffer, sizeof(ip_buffer), "%lu.%lu.%lu.%lu", (unsigned long)(ip_raw & 0xFF),
+                 (unsigned long)((ip_raw >> 8) & 0xFF), (unsigned long)((ip_raw >> 16) & 0xFF),
                  (unsigned long)((ip_raw >> 24) & 0xFF));
         printf("Wi-Fi connected. IP: %s\n", ip_buffer);
     }
@@ -301,23 +299,16 @@ int main(void)
     loadDiskLoader(0xFF00);
 
     // Set up disk controller structure for CPU
-    disk_controller_t disk_controller = {
-        .disk_select = (port_out)pico_disk_select,
-        .disk_status = (port_in)pico_disk_status,
-        .disk_function = (port_out)pico_disk_function,
-        .sector = (port_in)pico_disk_sector,
-        .write = (port_out)pico_disk_write,
-        .read = (port_in)pico_disk_read};
+    disk_controller_t disk_controller = {.disk_select = (port_out)pico_disk_select,
+                                         .disk_status = (port_in)pico_disk_status,
+                                         .disk_function = (port_out)pico_disk_function,
+                                         .sector = (port_in)pico_disk_sector,
+                                         .write = (port_out)pico_disk_write,
+                                         .read = (port_in)pico_disk_read};
 
     // Reset and initialize the CPU
     printf("Initializing Intel 8080 CPU...\n");
-    i8080_reset(&cpu,
-                terminal_read,
-                terminal_write,
-                sense,
-                &disk_controller,
-                io_port_in,
-                io_port_out);
+    i8080_reset(&cpu, terminal_read, terminal_write, sense, &disk_controller, io_port_in, io_port_out);
 
     // Set CPU to start at ROM_LOADER_ADDRESS (0xFF00) to boot from disk
     printf("Setting CPU to ROM_LOADER_ADDRESS (0xFF00) to boot from disk\n");
@@ -345,8 +336,8 @@ int main(void)
 
     printf("\n");
     printf("Memory Report:\n");
-    printf("  Flash used:     %lu / %lu bytes (%.1f / %.1f KB)\n",
-           flash_used, total_flash, flash_used / 1024.0f, total_flash / 1024.0f);
+    printf("  Flash used:     %lu / %lu bytes (%.1f / %.1f KB)\n", flash_used, total_flash, flash_used / 1024.0f,
+           total_flash / 1024.0f);
     printf("  RAM used:       %lu bytes (%.1f KB)\n", used_ram, used_ram / 1024.0f);
     printf("  RAM free (heap):%lu bytes (%.1f KB)\n", heap_free, heap_free / 1024.0f);
     printf("  Total SRAM:     %lu bytes (%.1f KB)\n", total_ram, total_ram / 1024.0f);
@@ -357,20 +348,24 @@ int main(void)
     printf("\n");
 
     // Main emulation loop - core 0 dedicated to CPU emulation
-    while (true)
+    for (;;)
     {
-        if (cpu_mode == CPU_RUNNING)
+        CPU_OPERATING_MODE mode = cpu_mode;
+        switch (mode)
         {
-            // Hot path: run many cycles before checking mode again
-            for (int i = 0; i < 1000; i++)
-            {
+            case CPU_RUNNING:
+                for (int i = 0; i < 1000; ++i)
+                {
+                    i8080_cycle(&cpu);
+                }
+                break;
+            case CPU_LOW_POWER:
                 i8080_cycle(&cpu);
-            }
-        }
-        else if (cpu_mode == CPU_LOW_POWER)
-        {
-            i8080_cycle(&cpu);
-            sleep_us(1); // Brief sleep to reduce CPU usage (1000 ns)
+                sleep_us(1);
+                break;
+            default:
+                tight_loop_contents(); // hint to compiler; no-op but lowers power
+                break;
         }
     }
 }

@@ -1,6 +1,7 @@
 #include "ws.h"
 
 #include "pico_ws_server/web_socket_server.h"
+#include "pico/time.h"
 
 #include <cstdio>
 #include <cstring>
@@ -11,6 +12,8 @@ namespace
     static constexpr uint16_t WS_SERVER_PORT = 8088;
     static constexpr uint32_t WS_MAX_CLIENTS = 1;
     static constexpr size_t WS_FRAME_PAYLOAD = 256;
+    static constexpr uint32_t WS_PING_INTERVAL_MS = 5000;
+    static constexpr uint8_t WS_MAX_MISSED_PONGS = 3;
 
     struct ws_context_t
     {
@@ -22,10 +25,77 @@ namespace
     static bool g_ws_running = false;
     static size_t g_ws_active_clients = 0;
     static std::unique_ptr<WebSocketServer> g_ws_server;
+    static uint32_t g_ws_last_conn_id = 0;
+    static absolute_time_t g_ws_next_ping_deadline;
+    static uint8_t g_ws_pending_pings = 0;
+    static uint8_t g_ws_missed_pongs = 0;
+
+    static inline void reset_ping_state(void)
+    {
+        g_ws_pending_pings = 0;
+        g_ws_missed_pongs = 0;
+        g_ws_next_ping_deadline = make_timeout_time_ms(WS_PING_INTERVAL_MS);
+    }
+
+    static inline void mark_connection_closed(void)
+    {
+        g_ws_active_clients = 0;
+        g_ws_last_conn_id = 0;
+        reset_ping_state();
+    }
+
+    static void send_ping_if_due(void)
+    {
+        if (!g_ws_running || !g_ws_server || g_ws_active_clients == 0 || g_ws_last_conn_id == 0)
+        {
+            return;
+        }
+
+        absolute_time_t now = get_absolute_time();
+        // Run only when now has reached or passed the deadline
+        if (absolute_time_diff_us(now, g_ws_next_ping_deadline) > 0)
+        {
+            return; // Not time yet
+        }
+
+        if (g_ws_pending_pings > 0)
+        {
+            ++g_ws_missed_pongs;
+            if (g_ws_missed_pongs > WS_MAX_MISSED_PONGS)
+            {
+                printf("WebSocket missed %u pongs, closing connection %u\n", g_ws_missed_pongs, g_ws_last_conn_id);
+                g_ws_server->close(g_ws_last_conn_id);
+                mark_connection_closed();
+                return;
+            }
+        }
+
+            if (g_ws_server->sendPing(g_ws_last_conn_id, nullptr, 0))
+        {
+            ++g_ws_pending_pings;
+            printf("WebSocket sent PING (pending=%u, missed=%u)\n", g_ws_pending_pings, g_ws_missed_pongs);
+        }
+            else
+            {
+                ++g_ws_missed_pongs;
+                printf("WebSocket PING send failed (missed=%u)\n", g_ws_missed_pongs);
+                if (g_ws_missed_pongs > WS_MAX_MISSED_PONGS)
+                {
+                    printf("WebSocket closing connection %u after send failure\n", g_ws_last_conn_id);
+                    g_ws_server->close(g_ws_last_conn_id);
+                    mark_connection_closed();
+                    return;
+                }
+            }
+
+        g_ws_next_ping_deadline = delayed_by_ms(now, WS_PING_INTERVAL_MS);
+    }
 
     void handle_connect(WebSocketServer &server, uint32_t conn_id)
     {
         ++g_ws_active_clients;
+        g_ws_last_conn_id = conn_id;
+        reset_ping_state();
         printf("WebSocket client connected (id=%u)\n", conn_id);
 
         ws_context_t *ctx = static_cast<ws_context_t *>(server.getCallbackExtra());
@@ -40,6 +110,11 @@ namespace
         if (g_ws_active_clients > 0)
         {
             --g_ws_active_clients;
+        }
+        if (conn_id == g_ws_last_conn_id)
+        {
+            g_ws_last_conn_id = 0;
+            reset_ping_state();
         }
         printf("WebSocket client closed (id=%u)\n", conn_id);
 
@@ -68,6 +143,20 @@ namespace
         {
             server.close(conn_id);
         }
+    }
+
+    void handle_pong(WebSocketServer &server, uint32_t conn_id, const void *data, size_t len)
+    {
+        (void)data;
+        (void)len;
+
+        if (conn_id != g_ws_last_conn_id)
+        {
+            return;
+        }
+
+        reset_ping_state();
+        printf("WebSocket received PONG from %u\n", conn_id);
     }
 } // namespace
 
@@ -107,6 +196,7 @@ extern "C"
             g_ws_server->setConnectCallback(handle_connect);
             g_ws_server->setCloseCallback(handle_close);
             g_ws_server->setMessageCallback(handle_message);
+            g_ws_server->setPongCallback(handle_pong);
             g_ws_server->setTcpNoDelay(true);  // Disable Nagle's algorithm for low latency
         }
 
@@ -160,6 +250,9 @@ extern "C"
         {
             return;
         }
+
+        // Heartbeat: send PING every WS_PING_INTERVAL_MS, close after WS_MAX_MISSED_PONGS
+        send_ping_if_due();
 
         uint8_t payload[WS_FRAME_PAYLOAD];
 

@@ -1,8 +1,8 @@
 #include "wifi_config.h"
 
-#include "pico/stdlib.h"
 #include "hardware/flash.h"
 #include "hardware/sync.h"
+#include "pico/stdlib.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -11,14 +11,14 @@
 // Pico/Pico W: 2MB flash, Pico 2/Pico 2 W: 4MB flash
 // We detect the actual flash size and use the last sector
 #ifndef PICO_FLASH_SIZE_BYTES
-#define PICO_FLASH_SIZE_BYTES (2 * 1024 * 1024)  // Default to 2MB if not defined
+#define PICO_FLASH_SIZE_BYTES (2 * 1024 * 1024) // Default to 2MB if not defined
 #endif
 
 #define WIFI_CONFIG_FLASH_OFFSET (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE)
-#define WIFI_CONFIG_MAGIC 0x57494649  // "WIFI" in hex
+#define WIFI_CONFIG_MAGIC 0x57494649 // "WIFI" in hex
 
 // Simple CRC32 implementation
-static uint32_t crc32(const uint8_t *data, size_t length)
+static uint32_t crc32(const uint8_t* data, size_t length)
 {
     uint32_t crc = 0xFFFFFFFF;
     for (size_t i = 0; i < length; i++)
@@ -33,11 +33,11 @@ static uint32_t crc32(const uint8_t *data, size_t length)
 }
 
 // Calculate checksum for config (excludes the checksum field itself)
-static uint32_t wifi_config_calculate_checksum(const wifi_config_t *config)
+static uint32_t wifi_config_calculate_checksum(const wifi_config_t* config)
 {
     // Calculate CRC over everything except the checksum field
     size_t data_size = offsetof(wifi_config_t, checksum);
-    return crc32((const uint8_t *)config, data_size);
+    return crc32((const uint8_t*)config, data_size);
 }
 
 void wifi_config_init(void)
@@ -48,7 +48,7 @@ void wifi_config_init(void)
 bool wifi_config_exists(void)
 {
     // Read the config from flash
-    const wifi_config_t *flash_config = (const wifi_config_t *)(XIP_BASE + WIFI_CONFIG_FLASH_OFFSET);
+    const wifi_config_t* flash_config = (const wifi_config_t*)(XIP_BASE + WIFI_CONFIG_FLASH_OFFSET);
 
     // Check magic number
     if (flash_config->magic != WIFI_CONFIG_MAGIC)
@@ -72,7 +72,7 @@ bool wifi_config_exists(void)
     return true;
 }
 
-bool wifi_config_load(char *ssid, size_t ssid_len, char *password, size_t password_len)
+bool wifi_config_load(char* ssid, size_t ssid_len, char* password, size_t password_len)
 {
     if (!ssid || ssid_len == 0 || !password || password_len == 0)
     {
@@ -84,7 +84,7 @@ bool wifi_config_load(char *ssid, size_t ssid_len, char *password, size_t passwo
         return false;
     }
 
-    const wifi_config_t *flash_config = (const wifi_config_t *)(XIP_BASE + WIFI_CONFIG_FLASH_OFFSET);
+    const wifi_config_t* flash_config = (const wifi_config_t*)(XIP_BASE + WIFI_CONFIG_FLASH_OFFSET);
 
     // Copy credentials
     strncpy(ssid, flash_config->ssid, ssid_len - 1);
@@ -96,7 +96,7 @@ bool wifi_config_load(char *ssid, size_t ssid_len, char *password, size_t passwo
     return true;
 }
 
-bool wifi_config_save(const char *ssid, const char *password)
+bool wifi_config_save(const char* ssid, const char* password)
 {
     if (!ssid || !password)
     {
@@ -133,7 +133,7 @@ bool wifi_config_save(const char *ssid, const char *password)
     printf("Writing WiFi credentials to flash...\n");
     uint32_t ints = save_and_disable_interrupts();
     flash_range_erase(WIFI_CONFIG_FLASH_OFFSET, FLASH_SECTOR_SIZE);
-    flash_range_program(WIFI_CONFIG_FLASH_OFFSET, (const uint8_t *)&config, sizeof(wifi_config_t));
+    flash_range_program(WIFI_CONFIG_FLASH_OFFSET, (const uint8_t*)&config, sizeof(wifi_config_t));
     restore_interrupts(ints);
 
     printf("WiFi credentials saved successfully\n");
@@ -143,7 +143,7 @@ bool wifi_config_save(const char *ssid, const char *password)
 bool wifi_config_clear(void)
 {
     printf("Clearing WiFi credentials from flash...\n");
-    
+
     // Erase the sector
     uint32_t ints = save_and_disable_interrupts();
     flash_range_erase(WIFI_CONFIG_FLASH_OFFSET, FLASH_SECTOR_SIZE);
@@ -179,7 +179,7 @@ bool wifi_config_prompt_and_save(uint32_t timeout_ms)
             last_dot_time = current_time;
         }
 
-        int c = getchar_timeout_us(10000);  // Check every 10ms
+        int c = getchar_timeout_us(10000); // Check every 10ms
         if (c != PICO_ERROR_TIMEOUT)
         {
             if (c == 'Y' || c == 'y')
@@ -210,7 +210,7 @@ bool wifi_config_prompt_and_save(uint32_t timeout_ms)
 
     while (ssid_idx < WIFI_CONFIG_SSID_MAX_LEN)
     {
-        int c = getchar_timeout_us(60 * 1000 * 1000);  // 60 second timeout
+        int c = getchar_timeout_us(60 * 1000 * 1000); // 60 second timeout
         if (c == PICO_ERROR_TIMEOUT)
         {
             printf("\nTimeout - WiFi configuration cancelled\n\n");
@@ -222,16 +222,16 @@ bool wifi_config_prompt_and_save(uint32_t timeout_ms)
             printf("\n");
             break;
         }
-        else if (c == 0x7F || c == 0x08)  // Backspace/Delete
+        else if (c == 0x7F || c == 0x08) // Backspace/Delete
         {
             if (ssid_idx > 0)
             {
                 ssid_idx--;
                 ssid[ssid_idx] = '\0';
-                printf("\b \b");  // Erase character from display
+                printf("\b \b"); // Erase character from display
             }
         }
-        else if (c >= 0x20 && c < 0x7F)  // Printable ASCII
+        else if (c >= 0x20 && c < 0x7F) // Printable ASCII
         {
             ssid[ssid_idx++] = (char)c;
             putchar(c);
@@ -258,7 +258,7 @@ bool wifi_config_prompt_and_save(uint32_t timeout_ms)
 
         while (password_idx < WIFI_CONFIG_PASSWORD_MAX_LEN)
         {
-            int c = getchar_timeout_us(60 * 1000 * 1000);  // 60 second timeout
+            int c = getchar_timeout_us(60 * 1000 * 1000); // 60 second timeout
             if (c == PICO_ERROR_TIMEOUT)
             {
                 printf("\nTimeout - WiFi configuration cancelled\n\n");
@@ -270,19 +270,19 @@ bool wifi_config_prompt_and_save(uint32_t timeout_ms)
                 printf("\n");
                 break;
             }
-            else if (c == 0x7F || c == 0x08)  // Backspace/Delete
+            else if (c == 0x7F || c == 0x08) // Backspace/Delete
             {
                 if (password_idx > 0)
                 {
                     password_idx--;
                     password[password_idx] = '\0';
-                    printf("\b \b");  // Erase character from display
+                    printf("\b \b"); // Erase character from display
                 }
             }
-            else if (c >= 0x20 && c < 0x7F)  // Printable ASCII
+            else if (c >= 0x20 && c < 0x7F) // Printable ASCII
             {
                 password[password_idx++] = (char)c;
-                putchar('*');  // Echo asterisk for password
+                putchar('*'); // Echo asterisk for password
             }
         }
 
@@ -293,7 +293,7 @@ bool wifi_config_prompt_and_save(uint32_t timeout_ms)
 
         while (confirm_idx < WIFI_CONFIG_PASSWORD_MAX_LEN)
         {
-            int c = getchar_timeout_us(60 * 1000 * 1000);  // 60 second timeout
+            int c = getchar_timeout_us(60 * 1000 * 1000); // 60 second timeout
             if (c == PICO_ERROR_TIMEOUT)
             {
                 printf("\nTimeout - WiFi configuration cancelled\n\n");
@@ -305,19 +305,19 @@ bool wifi_config_prompt_and_save(uint32_t timeout_ms)
                 printf("\n");
                 break;
             }
-            else if (c == 0x7F || c == 0x08)  // Backspace/Delete
+            else if (c == 0x7F || c == 0x08) // Backspace/Delete
             {
                 if (confirm_idx > 0)
                 {
                     confirm_idx--;
                     password_confirm[confirm_idx] = '\0';
-                    printf("\b \b");  // Erase character from display
+                    printf("\b \b"); // Erase character from display
                 }
             }
-            else if (c >= 0x20 && c < 0x7F)  // Printable ASCII
+            else if (c >= 0x20 && c < 0x7F) // Printable ASCII
             {
                 password_confirm[confirm_idx++] = (char)c;
-                putchar('*');  // Echo asterisk for password
+                putchar('*'); // Echo asterisk for password
             }
         }
 

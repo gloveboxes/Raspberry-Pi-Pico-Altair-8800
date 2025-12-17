@@ -12,7 +12,7 @@ void websocket_console_start(void);
 void websocket_console_enqueue_output(uint8_t value);
 
 // Try to dequeue a byte received from WebSocket clients (called from core 0).
-bool websocket_console_try_dequeue_input(uint8_t *value);
+bool websocket_console_try_dequeue_input(uint8_t* value);
 
 // Check if the console is running and Wi-Fi is connected.
 bool websocket_console_is_running(void);
@@ -22,7 +22,7 @@ void ws_poll_incoming(void);
 void ws_poll_outgoing(void);
 
 // Poll the WebSocket server for incoming and outgoing messages (internal use)
-static inline void ws_poll(int *counter)
+static inline void ws_poll(int* counter)
 {
     ws_poll_incoming();
     if (++(*counter) >= 2000)
@@ -42,7 +42,7 @@ bool websocket_console_init_server(void);
 void client_connected_cb(void);
 
 // WebSocket callback functions (internal use)
-bool websocket_console_handle_input(const uint8_t *payload, size_t payload_len, void *user_data);
-size_t websocket_console_supply_output(uint8_t *buffer, size_t max_len, void *user_data);
-void websocket_console_on_client_connected(void *user_data);
-void websocket_console_on_client_disconnected(void *user_data);
+bool websocket_console_handle_input(const uint8_t* payload, size_t payload_len, void* user_data);
+size_t websocket_console_supply_output(uint8_t* buffer, size_t max_len, void* user_data);
+void websocket_console_on_client_connected(void* user_data);
+void websocket_console_on_client_disconnected(void* user_data);

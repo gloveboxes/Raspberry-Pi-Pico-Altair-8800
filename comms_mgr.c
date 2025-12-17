@@ -59,11 +59,7 @@ static bool wifi_init(void)
 
     printf("[Core1] Connecting to Wi-Fi SSID '%s'...\n", ssid);
 
-    int err = cyw43_arch_wifi_connect_timeout_ms(
-        ssid,
-        password,
-        WIFI_AUTH,
-        WIFI_CONNECT_TIMEOUT_MS);
+    int err = cyw43_arch_wifi_connect_timeout_ms(ssid, password, WIFI_AUTH, WIFI_CONNECT_TIMEOUT_MS);
 
     if (err != 0)
     {
@@ -72,10 +68,10 @@ static bool wifi_init(void)
     }
 
     // Get and store IP address
-    struct netif *netif = netif_default;
+    struct netif* netif = netif_default;
     if (netif && netif_is_up(netif))
     {
-        const ip4_addr_t *addr = netif_ip4_addr(netif);
+        const ip4_addr_t* addr = netif_ip4_addr(netif);
         if (addr)
         {
             ip4addr_ntoa_r(addr, ip_address_buffer, sizeof(ip_address_buffer));
@@ -123,10 +119,10 @@ static void websocket_console_core1_entry(void)
     uint32_t ip_raw = 0;
     if (wifi_ok)
     {
-        struct netif *netif = netif_default;
+        struct netif* netif = netif_default;
         if (netif && netif_is_up(netif))
         {
-            const ip4_addr_t *addr = netif_ip4_addr(netif);
+            const ip4_addr_t* addr = netif_ip4_addr(netif);
             if (addr)
             {
                 ip_raw = ip4_addr_get_u32(addr);

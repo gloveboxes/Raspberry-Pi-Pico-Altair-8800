@@ -14,8 +14,8 @@
 #define NUM_MS_TIMERS 3
 
 static uint64_t ms_timer_targets[NUM_MS_TIMERS] = {0, 0, 0};
-static uint16_t ms_timer_delays[NUM_MS_TIMERS]  = {0, 0, 0};
-static uint64_t seconds_timer_target            = 0;
+static uint16_t ms_timer_delays[NUM_MS_TIMERS] = {0, 0, 0};
+static uint64_t seconds_timer_target = 0;
 
 static inline uint64_t get_elapsed_ms(void)
 {
@@ -40,7 +40,7 @@ static int get_timer_index(int port)
     }
 }
 
-static size_t format_boot_relative_time(char *buffer, size_t buffer_length)
+static size_t format_boot_relative_time(char* buffer, size_t buffer_length)
 {
     if (buffer == NULL || buffer_length == 0)
     {
@@ -51,7 +51,7 @@ static size_t format_boot_relative_time(char *buffer, size_t buffer_length)
     return (size_t)snprintf(buffer, buffer_length, "+%llus", (unsigned long long)seconds_since_boot);
 }
 
-static size_t format_wall_clock(char *buffer, size_t buffer_length, bool utc)
+static size_t format_wall_clock(char* buffer, size_t buffer_length, bool utc)
 {
     if (buffer == NULL || buffer_length == 0)
     {
@@ -64,7 +64,7 @@ static size_t format_wall_clock(char *buffer, size_t buffer_length, bool utc)
         return format_boot_relative_time(buffer, buffer_length);
     }
 
-    struct tm *result = utc ? gmtime(&now) : localtime(&now);
+    struct tm* result = utc ? gmtime(&now) : localtime(&now);
 
     if (result == NULL)
     {
@@ -75,9 +75,9 @@ static size_t format_wall_clock(char *buffer, size_t buffer_length, bool utc)
     return len;
 }
 
-size_t time_output(int port, uint8_t data, char *buffer, size_t buffer_length)
+size_t time_output(int port, uint8_t data, char* buffer, size_t buffer_length)
 {
-    size_t len    = 0;
+    size_t len = 0;
     int timer_idx = get_timer_index(port);
 
     switch (port)
@@ -121,7 +121,7 @@ size_t time_output(int port, uint8_t data, char *buffer, size_t buffer_length)
 uint8_t time_input(uint8_t port)
 {
     uint8_t retVal = 0;
-    int timer_idx  = get_timer_index(port);
+    int timer_idx = get_timer_index(port);
 
     switch (port)
     {
@@ -137,8 +137,8 @@ uint8_t time_input(uint8_t port)
                 if (target_time > 0 && get_elapsed_ms() >= target_time)
                 {
                     ms_timer_targets[timer_idx] = 0;
-                    ms_timer_delays[timer_idx]  = 0;
-                    retVal                      = 0;
+                    ms_timer_delays[timer_idx] = 0;
+                    retVal = 0;
                 }
                 else if (target_time > 0)
                 {
@@ -158,7 +158,7 @@ uint8_t time_input(uint8_t port)
             if (target_time > 0 && now_seconds >= target_time)
             {
                 seconds_timer_target = 0;
-                retVal               = 0;
+                retVal = 0;
             }
             else if (target_time > 0)
             {

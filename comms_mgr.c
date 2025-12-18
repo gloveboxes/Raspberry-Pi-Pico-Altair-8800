@@ -31,6 +31,7 @@ volatile bool console_initialized = false;
 volatile bool wifi_connected = false;
 
 char ip_address_buffer[32] = {0};
+static char connected_ssid[WIFI_CONFIG_SSID_MAX_LEN + 1] = {0};
 
 static bool wifi_init(void)
 {
@@ -58,6 +59,10 @@ static bool wifi_init(void)
     printf("[Core1] Using stored credentials from flash\n");
 
     printf("[Core1] Connecting to Wi-Fi SSID '%s'...\n", ssid);
+
+    // Store the SSID we're connecting to
+    strncpy(connected_ssid, ssid, sizeof(connected_ssid) - 1);
+    connected_ssid[sizeof(connected_ssid) - 1] = '\0';
 
     int err = cyw43_arch_wifi_connect_timeout_ms(ssid, password, WIFI_AUTH, WIFI_CONNECT_TIMEOUT_MS);
 
@@ -102,6 +107,11 @@ uint32_t wait_for_wifi(void)
     // Block until core 1 signals Wi-Fi init complete
     // Returns 0 on failure, or raw 32-bit IP address on success
     return multicore_fifo_pop_blocking();
+}
+
+const char* get_connected_ssid(void)
+{
+    return connected_ssid[0] != '\0' ? connected_ssid : NULL;
 }
 
 bool websocket_console_is_running(void)

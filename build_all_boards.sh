@@ -31,7 +31,7 @@ fi
 echo ""
 
 # Array of boards to test
-BOARDS=("pico" "pico_w" "pico2" "pico2_w" "pimoroni_pico_plus2_w_rp2350")
+BOARDS=("pico" "pico_w" "pico2" "pico2_w" "pimoroni_pico_plus2_w_rp2350" "pico2_w_inky")
 
 # Create tests directory
 TESTS_DIR="${SCRIPT_DIR}/tests"
@@ -57,7 +57,13 @@ for BOARD in "${BOARDS[@]}"; do
     # Clean and build (skip version increment since we did it once at the start)
     rm -rf build
     
-    if cmake -B build -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD="$BOARD" -DSKIP_VERSION_INCREMENT=1 && \
+    # Set CMake options based on board
+    CMAKE_OPTS="-DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=${BOARD//_inky/} -DSKIP_VERSION_INCREMENT=1"
+    if [[ "$BOARD" == *"_inky" ]]; then
+        CMAKE_OPTS="$CMAKE_OPTS -DINKY_SUPPORT=ON"
+    fi
+    
+    if cmake -B build $CMAKE_OPTS && \
        cmake --build build -- -j; then
         
         BUILD_END=$(date +%s)

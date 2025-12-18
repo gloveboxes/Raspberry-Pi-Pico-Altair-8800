@@ -6,3 +6,4 @@
 
 void websocket_console_start(void);
 uint32_t wait_for_wifi(void);
+const char* get_connected_ssid(void);

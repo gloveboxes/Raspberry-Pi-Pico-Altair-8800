@@ -4,9 +4,11 @@
 #include "build_version.h"
 #include "comms_mgr.h"
 #include "cpu_state.h"
+#include "FrontPanels/inky_display.h"
 #include "io_ports.h"
 #include "pico/error.h"
 #include "pico/stdlib.h"
+#include "wifi.h"
 #include "wifi_config.h"
 #include <stdio.h>
 #include <string.h>
@@ -17,6 +19,10 @@
 // Include the CPM disk image
 #include "Disks/blank_disk.h"
 #include "Disks/cpm63k_disk.h"
+
+// WiFi connection status (global for Inky display)
+static bool g_wifi_ok = false;
+static char g_ip_buffer[32] = {0};
 
 // CPU instance defined in cpu_state.c
 extern intel8080_t cpu;
@@ -211,20 +217,19 @@ static void setup_wifi(void)
     // Returns 0 on failure, or raw 32-bit IP address on success
     printf("Waiting for Wi-Fi initialization on core 1...\n");
     uint32_t ip_raw = wait_for_wifi();
-    char ip_buffer[32] = {0};
-    bool wifi_ok = (ip_raw != 0);
+    g_wifi_ok = (ip_raw != 0);
 
-    if (wifi_ok)
+    if (g_wifi_ok)
     {
         // Convert raw IP to dotted-decimal string
-        snprintf(ip_buffer, sizeof(ip_buffer), "%lu.%lu.%lu.%lu", (unsigned long)(ip_raw & 0xFF),
+        snprintf(g_ip_buffer, sizeof(g_ip_buffer), "%lu.%lu.%lu.%lu", (unsigned long)(ip_raw & 0xFF),
                  (unsigned long)((ip_raw >> 8) & 0xFF), (unsigned long)((ip_raw >> 16) & 0xFF),
                  (unsigned long)((ip_raw >> 24) & 0xFF));
-        printf("Wi-Fi connected. IP: %s\n", ip_buffer);
+        printf("Wi-Fi connected. IP: %s\n", g_ip_buffer);
     }
     else
     {
-        strncpy(ip_buffer, "No network", sizeof(ip_buffer) - 1);
+        strncpy(g_ip_buffer, "No network", sizeof(g_ip_buffer) - 1);
         printf("Wi-Fi unavailable; USB terminal only.\n");
     }
 }
@@ -233,6 +238,9 @@ int main(void)
 {
     // Initialize stdio first
     stdio_init_all();
+
+    // Initialize Inky display early (if enabled)
+    inky_display_init();
 
 #if defined(CYW43_WL_GPIO_LED_PIN)
     // Board has WiFi - check if credentials exist
@@ -369,6 +377,15 @@ int main(void)
 
     printf("Starting Altair 8800 emulation...\n");
     printf("\n");
+
+#if defined(CYW43_WL_GPIO_LED_PIN)
+    // Update Inky display with system information (if enabled)
+    const char* wifi_ssid = g_wifi_ok ? get_connected_ssid() : NULL;
+    inky_display_update(wifi_ssid, g_wifi_ok ? g_ip_buffer : NULL);
+#else
+    // No WiFi on this board
+    inky_display_update(NULL, NULL);
+#endif
 
     // Main emulation loop - core 0 dedicated to CPU emulation
     for (;;)

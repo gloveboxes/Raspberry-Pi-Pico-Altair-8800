@@ -12,11 +12,24 @@ endif()
 # Debug option (off by default)
 option(ALTAIR_DEBUG "Enable debug logging" OFF)
 
+# Pico Inky support (off by default)
+option(INKY_SUPPORT "Enable Pico Inky E-Ink display support" OFF)
+
 # Import Pico SDK
 include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 
 project(altair C CXX ASM)
 pico_sdk_init()
+
+# Import Pimoroni Pico libraries if Inky support is enabled
+if(INKY_SUPPORT)
+    set(PIMORONI_PICO_PATH ${CMAKE_CURRENT_LIST_DIR}/lib/pimoroni-pico)
+    include(${CMAKE_CURRENT_LIST_DIR}/lib/pimoroni-pico/pimoroni_pico_import.cmake)
+    # Only build the drivers and libraries we need, not examples
+    add_subdirectory(${PIMORONI_PICO_PATH}/common pimoroni-pico/common)
+    add_subdirectory(${PIMORONI_PICO_PATH}/drivers pimoroni-pico/drivers)
+    add_subdirectory(${PIMORONI_PICO_PATH}/libraries pimoroni-pico/libraries)
+endif()
 
 # Generate build version header
 set(VERSION_FILE ${CMAKE_CURRENT_LIST_DIR}/build_version.txt)
@@ -42,6 +55,7 @@ set(ALTAIR_SOURCES
     main.c
     cpu_state.c
     FrontPanels/virtual_monitor.c
+    FrontPanels/inky_display.cpp
     i8080_disasm.c
     Altair8800/intel8080.c
     Altair8800/memory.c
@@ -100,6 +114,11 @@ if(ALTAIR_DEBUG)
     target_compile_definitions(altair PRIVATE ALTAIR_DEBUG=1)
 endif()
 
+# Add Inky support definition if enabled
+if(INKY_SUPPORT)
+    target_compile_definitions(altair PRIVATE INKY_SUPPORT=1)
+endif()
+
 # Make sure all CYW43 headers are visible and include Altair8800 directory
 target_include_directories(altair PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}
@@ -133,6 +152,15 @@ target_link_libraries(altair
 
 if(PICO_CYW43_SUPPORTED)
     target_link_libraries(altair pico_cyw43_arch_lwip_poll)
+endif()
+
+# Link Pimoroni Inky libraries if enabled
+if(INKY_SUPPORT)
+    target_link_libraries(altair
+        uc8151          # Inky display driver
+        pico_graphics   # Graphics library
+        button          # Button support
+    )
 endif()
 
 # Generate .uf2, .elf, etc.

@@ -295,7 +295,7 @@ void altair_panel_command_handler(void)
             break;
         case LOAD_ALTAIR_BASIC:
             memset(memory, 0x00, 64 * 1024); // clear altair memory
-            load8kRom(0x0000); // load Altair BASIC at 0x0000
+            load8kRom(0x0000);               // load Altair BASIC at 0x0000
             publish_message("\r\n*** Altair BASIC Loaded ***\r\n", 32);
             i8080_examine(&cpu, 0x0000); // 0x0000 loads Altair BASIC
             cpu_state_set_mode(CPU_RUNNING);

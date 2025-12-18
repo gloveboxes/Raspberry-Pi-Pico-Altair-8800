@@ -78,15 +78,20 @@ void display_2_8_update(const char* ssid, const char* ip)
     // Switch to bitmap8 font for remaining text
     g_graphics->set_font("bitmap8");
     
-    // Line 2: Board name (white)
+    // Line 2: Board name (light blue label + white value)
+    g_graphics->set_pen(LABEL);
+    g_graphics->text("Board:", {left_margin, y_pos}, 320, 2);
     g_graphics->set_pen(TEXT);
-    snprintf(line_buffer, sizeof(line_buffer), "Board: %s", PICO_BOARD);
-    g_graphics->text(line_buffer, {left_margin, y_pos}, 320, 2);  // Scale 2x
+    snprintf(line_buffer, sizeof(line_buffer), " %s", PICO_BOARD);
+    g_graphics->text(line_buffer, {left_margin + 63, y_pos}, 320, 2);
     y_pos += 30;
     
-    // Line 3: Build version with date and time (white)
-    snprintf(line_buffer, sizeof(line_buffer), "Build: v%d %s %s", BUILD_VERSION, BUILD_DATE, BUILD_TIME);
-    g_graphics->text(line_buffer, {left_margin, y_pos}, 320, 2);
+    // Line 3: Build version with date and time (light blue label + white value)
+    g_graphics->set_pen(LABEL);
+    g_graphics->text("Build:", {left_margin, y_pos}, 320, 2);
+    g_graphics->set_pen(TEXT);
+    snprintf(line_buffer, sizeof(line_buffer), " v%d %s %s", BUILD_VERSION, BUILD_DATE, BUILD_TIME);
+    g_graphics->text(line_buffer, {left_margin + 63, y_pos}, 320, 2);
     y_pos += 40;
     
     // Line 4: WiFi SSID (light blue label + white value)

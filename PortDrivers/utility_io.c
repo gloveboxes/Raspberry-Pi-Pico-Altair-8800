@@ -27,7 +27,7 @@ size_t utility_output(int port, uint8_t data, char* buffer, size_t buffer_length
         case 70: // Load Altair version number
             if (buffer != NULL && buffer_length > 0)
             {
-                len = (size_t)snprintf(buffer, buffer_length, "%d (%s %s)\n", BUILD_VERSION, BUILD_DATE, BUILD_TIME);
+                len = (size_t)snprintf(buffer, buffer_length, "%s %d (%s %s)\n", PICO_BOARD, BUILD_VERSION, BUILD_DATE, BUILD_TIME);
             }
             break;
         default:

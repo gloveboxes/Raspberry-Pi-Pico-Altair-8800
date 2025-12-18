@@ -391,7 +391,7 @@
         if (!elements.monitorBtn) return;
         elements.monitorBtn.onclick = function() {
           if (state.connected && state.ws && state.ws.readyState === WebSocket.OPEN) {
-            sendControlCharacter(13); // Ctrl+M (CR)
+            sendControlCharacter(28); // Ctrl+M (ASCII 28 to toggle CPU monitor)
           }
           if (state.term) {
             state.term.focus();
@@ -603,7 +603,13 @@
        */
       function handleKeyPress(key, ev) {
         if (ev.ctrlKey) {
-          sendControlCharacter(ev.keyCode & 0x1F);
+          // Special case: CTRL-M sends ASCII 28 instead of 13 to distinguish from Enter
+          // This allows CTRL-M to toggle CPU monitor mode
+          if (ev.key === 'm' || ev.key === 'M') {
+            sendControlCharacter(28);
+          } else {
+            sendControlCharacter(ev.keyCode & 0x1F);
+          }
           return;
         }
 

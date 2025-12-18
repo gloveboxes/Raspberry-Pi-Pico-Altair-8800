@@ -16,9 +16,9 @@ static constexpr uint32_t WS_MAX_CLIENTS = 2;
 // WS_MAX_CLIENTS to avoid RSTs during the WebSocket handshake when a browser
 // holds an HTTP keep-alive connection open.
 static constexpr uint32_t WS_SERVER_MAX_CONNECTIONS = 8;
-static constexpr size_t WS_FRAME_PAYLOAD = 256;
-static constexpr uint32_t WS_PING_INTERVAL_MS = 15000; // 15s
-static constexpr uint8_t WS_MAX_MISSED_PONGS = 4;      // 60s total timeout
+static constexpr size_t WS_FRAME_PAYLOAD = 128;
+static constexpr uint32_t WS_PING_INTERVAL_MS = 10000; // 10s
+static constexpr uint8_t WS_MAX_MISSED_PONGS = 3;      // 30s total timeout
 
 struct ws_context_t
 {
@@ -110,20 +110,26 @@ static void send_ping_if_due(void)
             if (ping_sent)
             {
                 ++conn->pending_pings;
+#ifdef ALTAIR_DEBUG
                 printf("WebSocket sent PING to %u (pending=%u, missed=%u)\n", conn->conn_id, conn->pending_pings,
                        conn->missed_pongs);
+#endif
             }
             else
             {
                 ++conn->missed_pongs;
+#ifdef ALTAIR_DEBUG
                 printf("WebSocket PING send failed to %u (missed=%u)\n", conn->conn_id, conn->missed_pongs);
+#endif
             }
         }
 
         // Close if too many missed pongs
         if (conn->missed_pongs > WS_MAX_MISSED_PONGS)
         {
+#ifdef ALTAIR_DEBUG
             printf("WebSocket closing connection %u after %u missed pongs\n", conn->conn_id, conn->missed_pongs);
+#endif
             g_ws_server->close(conn->conn_id);
             conn->closing = true;
             continue;
@@ -138,13 +144,17 @@ void handle_connect(WebSocketServer& server, uint32_t conn_id)
     ws_connection_state_t* conn = allocate_connection(conn_id);
     if (!conn)
     {
+#ifdef ALTAIR_DEBUG
         printf("WebSocket max connections reached, rejecting %u\n", conn_id);
+#endif
         server.close(conn_id);
         return;
     }
 
     ++g_ws_active_clients;
+#ifdef ALTAIR_DEBUG
     printf("WebSocket client connected (id=%u, total=%zu)\n", conn_id, g_ws_active_clients);
+#endif
 
     ws_context_t* ctx = static_cast<ws_context_t*>(server.getCallbackExtra());
     if (ctx && ctx->callbacks.on_client_connected)
@@ -170,7 +180,9 @@ void handle_close(WebSocketServer& server, uint32_t conn_id)
         }
     }
 
+#ifdef ALTAIR_DEBUG
     printf("WebSocket client closed (id=%u, remaining=%zu)\n", conn_id, g_ws_active_clients);
+#endif
 
     ws_context_t* ctx = static_cast<ws_context_t*>(server.getCallbackExtra());
     if (ctx && ctx->callbacks.on_client_disconnected)
@@ -224,7 +236,9 @@ void handle_pong(WebSocketServer& server, uint32_t conn_id, const void* data, si
     conn->pending_pings = 0;
     conn->missed_pongs = 0;
     conn->next_ping_deadline = make_timeout_time_ms(WS_PING_INTERVAL_MS);
+#ifdef ALTAIR_DEBUG
     printf("WebSocket received PONG from %u\n", conn_id);
+#endif
 }
 } // namespace
 
@@ -248,7 +262,9 @@ extern "C"
     {
         if (!g_ws_initialized)
         {
+#ifdef ALTAIR_DEBUG
             printf("WebSocket server not initialized\n");
+#endif
             return false;
         }
 
@@ -271,14 +287,18 @@ extern "C"
         g_ws_active_clients = 0;
         if (!g_ws_server->startListening(WS_SERVER_PORT))
         {
+#ifdef ALTAIR_DEBUG
             printf("Failed to start WebSocket server on port %u\n", WS_SERVER_PORT);
+#endif
             g_ws_server.reset();
             g_ws_running = false;
             return false;
         }
 
         g_ws_running = true;
+#ifdef ALTAIR_DEBUG
         printf("WebSocket server listening on port %u\n", WS_SERVER_PORT);
+#endif
         return true;
     }
 
@@ -341,12 +361,17 @@ extern "C"
             {
                 continue;
             }
+#ifdef ALTAIR_DEBUG
+            printf("WebSocket sending %zu bytes to %u\n", payload_len, conn->conn_id);
+#endif
 
             if (!g_ws_server->sendMessage(conn->conn_id, payload, payload_len))
             {
+#ifdef ALTAIR_DEBUG
                 // This specific client's TCP send buffer is full - they miss this frame
                 // (expected under load; real-time data, no backpressure)
                 printf("WebSocket send failed, dropping %zu bytes\n", payload_len);
+#endif
             }
         }
     }

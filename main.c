@@ -18,12 +18,33 @@
 #include "Disks/blank_disk.h"
 #include "Disks/cpm63k_disk.h"
 
-// Global CPU instance
-static intel8080_t cpu;
+// CPU instance defined in cpu_state.c
+extern intel8080_t cpu;
+
+// Forward declarations of static functions
+static uint8_t terminal_read(void);
+static void terminal_write(uint8_t c);
+static inline uint8_t sense(void);
+
+// Static disk controller reference for reset
+static disk_controller_t* g_disk_controller = NULL;
 
 void client_connected_cb(void)
 {
     cpu_state_set_mode(CPU_RUNNING);
+}
+
+// Reset function for CPU monitor
+void altair_reset(void)
+{
+    if (g_disk_controller)
+    {
+        memset(memory, 0x00, 64 * 1024); // Clear Altair memory
+        loadDiskLoader(0xFF00);          // Load disk boot loader at 0xFF00
+        i8080_reset(&cpu, terminal_read, terminal_write, sense, g_disk_controller, io_port_in, io_port_out);
+        i8080_examine(&cpu, 0xFF00); // Reset to boot loader address
+        bus_switches = cpu.address_bus;
+    }
 }
 
 // Process character through ANSI escape sequence state machine
@@ -114,12 +135,14 @@ static uint8_t process_ansi_sequence(uint8_t ch)
 // Terminal read function - non-blocking
 static uint8_t terminal_read(void)
 {
+
+#if defined(CYW43_WL_GPIO_LED_PIN)
     uint8_t ws_ch = 0;
     if (websocket_console_try_dequeue_input(&ws_ch))
     {
         return (uint8_t)(ws_ch & ASCII_MASK_7BIT);
     }
-
+#else
     int c = getchar_timeout_us(0); // Non-blocking read
     if (c == PICO_ERROR_TIMEOUT)
     {
@@ -128,20 +151,24 @@ static uint8_t terminal_read(void)
 
     uint8_t ch = (uint8_t)(c & ASCII_MASK_7BIT);
     return process_ansi_sequence(ch);
+#endif
 }
 
 // Terminal write function
 static void terminal_write(uint8_t c)
 {
     c &= ASCII_MASK_7BIT; // Take first 7 bits only
-    // putchar(c);
+#if defined(CYW43_WL_GPIO_LED_PIN)
     websocket_console_enqueue_output(c);
+#else
+    putchar(c);
+#endif
 }
 
-// Sense switches stub
+// Sense switches
 static inline uint8_t sense(void)
 {
-    return 0x00; // No sense switches on Pico
+    return (uint8_t)(bus_switches >> 8);
 }
 
 // Initialize and configure WiFi
@@ -246,6 +273,8 @@ int main(void)
     }
     // Give a brief moment after connection for terminal to be ready
     sleep_ms(500);
+
+    cpu_state_set_mode(CPU_RUNNING);
 #endif
 
     // Send test output
@@ -290,12 +319,15 @@ int main(void)
     loadDiskLoader(0xFF00);
 
     // Set up disk controller structure for CPU
-    disk_controller_t disk_controller = {.disk_select = (port_out)pico_disk_select,
-                                         .disk_status = (port_in)pico_disk_status,
-                                         .disk_function = (port_out)pico_disk_function,
-                                         .sector = (port_in)pico_disk_sector,
-                                         .write = (port_out)pico_disk_write,
-                                         .read = (port_in)pico_disk_read};
+    static disk_controller_t disk_controller = {.disk_select = (port_out)pico_disk_select,
+                                                .disk_status = (port_in)pico_disk_status,
+                                                .disk_function = (port_out)pico_disk_function,
+                                                .sector = (port_in)pico_disk_sector,
+                                                .write = (port_out)pico_disk_write,
+                                                .read = (port_in)pico_disk_read};
+
+    // Store reference for reset function
+    g_disk_controller = &disk_controller;
 
     // Reset and initialize the CPU
     printf("Initializing Intel 8080 CPU...\n");
@@ -354,6 +386,16 @@ int main(void)
                 i8080_cycle(&cpu);
                 sleep_us(1);
                 break;
+            case CPU_STOPPED:
+            {
+                uint8_t ch = 0;
+                if (websocket_console_try_dequeue_monitor_input(&ch))
+                {
+                    // Process monitor input character
+                    process_control_panel_commands_char(ch);
+                }
+            }
+            break;
             default:
                 tight_loop_contents(); // hint to compiler; no-op but lowers power
                 break;

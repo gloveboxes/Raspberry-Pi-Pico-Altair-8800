@@ -9,10 +9,14 @@
 void websocket_console_start(void);
 
 // Enqueue a byte from the emulator (core 0) to be sent to WebSocket clients.
+// 4KB TX queue is large enough for both normal terminal and CPU monitor bulk output.
 void websocket_console_enqueue_output(uint8_t value);
 
 // Try to dequeue a byte received from WebSocket clients (called from core 0).
 bool websocket_console_try_dequeue_input(uint8_t* value);
+
+// Try to dequeue a byte received from the CPU monitor input queue (called from core 0).
+bool websocket_console_try_dequeue_monitor_input(uint8_t* value);
 
 // Check if the console is running and Wi-Fi is connected.
 bool websocket_console_is_running(void);
@@ -40,6 +44,9 @@ bool websocket_console_init_server(void);
 
 // Callback from main.c to handle client connection
 void client_connected_cb(void);
+
+// Forward declaration for CPU monitor function (caller buffer is not mutated)
+void process_virtual_input(const char* command, size_t len);
 
 // WebSocket callback functions (internal use)
 bool websocket_console_handle_input(const uint8_t* payload, size_t payload_len, void* user_data);

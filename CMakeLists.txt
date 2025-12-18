@@ -9,6 +9,9 @@ endif()
 # Use serial console to configure credentials on boot
 # PICO_CYW43_SUPPORTED is automatically set by the SDK based on board type
 
+# Debug option (off by default)
+option(ALTAIR_DEBUG "Enable debug logging" OFF)
+
 # Import Pico SDK
 include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 
@@ -38,6 +41,8 @@ target_include_directories(lwipopts_provider INTERFACE ${CMAKE_CURRENT_LIST_DIR}
 set(ALTAIR_SOURCES
     main.c
     cpu_state.c
+    FrontPanels/virtual_monitor.c
+    i8080_disasm.c
     Altair8800/intel8080.c
     Altair8800/memory.c
     Altair8800/pico_disk.c
@@ -90,11 +95,17 @@ add_executable(altair ${ALTAIR_SOURCES})
 # Ensure build version is generated before compiling
 add_dependencies(altair generate_version)
 
+# Add debug definition if enabled
+if(ALTAIR_DEBUG)
+    target_compile_definitions(altair PRIVATE ALTAIR_DEBUG=1)
+endif()
+
 # Make sure all CYW43 headers are visible and include Altair8800 directory
 target_include_directories(altair PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}
     ${CMAKE_CURRENT_LIST_DIR}/Altair8800
     ${CMAKE_CURRENT_LIST_DIR}/PortDrivers
+    ${CMAKE_CURRENT_LIST_DIR}/FrontPanels
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 

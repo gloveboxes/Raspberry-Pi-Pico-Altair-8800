@@ -8,66 +8,67 @@
 // Copy-on-write implemented via per-sector patch list
 
 // Status bits (active-low)
-#define STATUS_ENWD         1
-#define STATUS_MOVE_HEAD    2
-#define STATUS_HEAD         4
-#define STATUS_SECTOR       8      // Bit 3: Sector position (0=positioned, 1=not ready)
-#define STATUS_IE           32
-#define STATUS_TRACK_0      64
-#define STATUS_NRDA         128
+#define STATUS_ENWD 1
+#define STATUS_MOVE_HEAD 2
+#define STATUS_HEAD 4
+#define STATUS_SECTOR 8 // Bit 3: Sector position (0=positioned, 1=not ready)
+#define STATUS_IE 32
+#define STATUS_TRACK_0 64
+#define STATUS_NRDA 128
 
 // Control bits
-#define CONTROL_STEP_IN     1
-#define CONTROL_STEP_OUT    2
-#define CONTROL_HEAD_LOAD   4
+#define CONTROL_STEP_IN 1
+#define CONTROL_STEP_OUT 2
+#define CONTROL_HEAD_LOAD 4
 #define CONTROL_HEAD_UNLOAD 8
-#define CONTROL_IE          16
-#define CONTROL_ID          32
-#define CONTROL_HCS         64
-#define CONTROL_WE          128
+#define CONTROL_IE 16
+#define CONTROL_ID 32
+#define CONTROL_HCS 64
+#define CONTROL_WE 128
 
 // Disk geometry for 8" floppy
-#define SECTOR_SIZE         137
-#define SECTORS_PER_TRACK   32
-#define MAX_TRACKS          77
-#define TRACK_SIZE          (SECTORS_PER_TRACK * SECTOR_SIZE)
-#define DISK_SIZE           (MAX_TRACKS * TRACK_SIZE)
+#define SECTOR_SIZE 137
+#define SECTORS_PER_TRACK 32
+#define MAX_TRACKS 77
+#define TRACK_SIZE (SECTORS_PER_TRACK * SECTOR_SIZE)
+#define DISK_SIZE (MAX_TRACKS * TRACK_SIZE)
 
 // Drive selection
-#define MAX_DRIVES          4
-#define DRIVE_SELECT_MASK   0x0F
-#define SECTOR_SHIFT_BITS   1
+#define MAX_DRIVES 4
+#define DRIVE_SELECT_MASK 0x0F
+#define SECTOR_SHIFT_BITS 1
 
 // Hash table size for sector patches (power of 2 for fast modulo)
-#define PATCH_HASH_SIZE     32
+#define PATCH_HASH_SIZE 32
 
-typedef struct sector_patch {
+typedef struct sector_patch
+{
     uint16_t index;
-    struct sector_patch *next;
+    struct sector_patch* next;
     uint8_t data[SECTOR_SIZE];
 } sector_patch_t;
 
 typedef struct
 {
-    const uint8_t *disk_image_flash; // Read-only pointer to flash image
-    uint32_t disk_size;         // Size of disk image
-    uint8_t track;              // Current track (0-76)
-    uint8_t sector;             // Current sector (0-31)
-    uint8_t status;             // Status register
-    uint8_t write_status;       // Write operation status
-    uint32_t disk_pointer;      // Current position in disk
-    uint8_t sector_pointer;     // Position within current sector
-    uint8_t sector_data[SECTOR_SIZE + 2];  // Sector buffer
-    bool sector_dirty;          // Sector needs writing back
-    bool have_sector_data;      // Sector buffer is valid
-    bool disk_loaded;           // Disk image is loaded
-    sector_patch_t *patch_hash[PATCH_HASH_SIZE];  // Hash table of modified sectors
+    const uint8_t* disk_image_flash;             // Read-only pointer to flash image
+    uint32_t disk_size;                          // Size of disk image
+    uint8_t track;                               // Current track (0-76)
+    uint8_t sector;                              // Current sector (0-31)
+    uint8_t status;                              // Status register
+    uint8_t write_status;                        // Write operation status
+    uint32_t disk_pointer;                       // Current position in disk
+    uint8_t sector_pointer;                      // Position within current sector
+    uint8_t sector_data[SECTOR_SIZE + 2];        // Sector buffer
+    bool sector_dirty;                           // Sector needs writing back
+    bool have_sector_data;                       // Sector buffer is valid
+    bool disk_loaded;                            // Disk image is loaded
+    sector_patch_t* patch_hash[PATCH_HASH_SIZE]; // Hash table of modified sectors
 } pico_disk_t;
 
 typedef struct
 {
     pico_disk_t disk[MAX_DRIVES];
-    pico_disk_t *current;
+    pico_disk_t* current;
     uint8_t current_disk;
 } pico_disk_controller_t;
 
@@ -84,6 +85,6 @@ uint8_t pico_disk_read(void);
 
 // Initialization
 void pico_disk_init(void);
-bool pico_disk_load(uint8_t drive, const uint8_t *disk_image, uint32_t size);
+bool pico_disk_load(uint8_t drive, const uint8_t* disk_image, uint32_t size);
 
 #endif

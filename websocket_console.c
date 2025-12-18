@@ -1,5 +1,6 @@
 #include "websocket_console.h"
 
+#include <ctype.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -11,6 +12,7 @@
 #include "pico/stdlib.h"
 #include "pico/util/queue.h"
 
+#include "cpu_state.h"
 #include "ws.h"
 
 // Enable WebSocket console only if board has WiFi capability
@@ -18,34 +20,14 @@
 
 #define WS_RX_QUEUE_DEPTH 128
 #define WS_TX_QUEUE_DEPTH 512
+#define MONITOR_QUEUE_DEPTH 16
 
 static queue_t ws_rx_queue;
 static queue_t ws_tx_queue;
+static queue_t monitor_queue;
 
 static void websocket_console_clear_tx_buffer(void);
 static void websocket_console_clear_queues(void);
-
-/**
- * @brief Pushes a byte into the WebSocket console transmit buffer.
- *
- * Adds a byte to the TX queue. If the queue is full,
- * the oldest byte is discarded to make room for the new one.
- * Thread-safe, uses Pico SDK queue.
- *
- * @param value Byte to add to the transmit buffer
- */
-static void websocket_console_tx_push(uint8_t value)
-{
-    if (!queue_try_add(&ws_tx_queue, &value))
-    {
-        // Queue full, drop oldest byte to make room
-        uint8_t discard = 0;
-        if (queue_try_remove(&ws_tx_queue, &discard))
-        {
-            queue_try_add(&ws_tx_queue, &value);
-        }
-    }
-}
 
 /**
  * @brief Pops bytes from the WebSocket console transmit buffer.
@@ -97,6 +79,7 @@ void websocket_queue_init(void)
     // Initialize queues on core 0 before launching core 1
     queue_init(&ws_tx_queue, sizeof(uint8_t), WS_TX_QUEUE_DEPTH);
     queue_init(&ws_rx_queue, sizeof(uint8_t), WS_RX_QUEUE_DEPTH);
+    queue_init(&monitor_queue, sizeof(uint8_t), MONITOR_QUEUE_DEPTH);
 }
 
 /**
@@ -137,7 +120,7 @@ void websocket_console_enqueue_output(uint8_t value)
         return;
     }
 
-    websocket_console_tx_push(value);
+    queue_add_blocking(&ws_tx_queue, &value);
 }
 
 /**
@@ -153,12 +136,19 @@ bool websocket_console_try_dequeue_input(uint8_t* value)
     return queue_try_remove(&ws_rx_queue, value);
 }
 
+bool websocket_console_try_dequeue_monitor_input(uint8_t* value)
+{
+    return queue_try_remove(&monitor_queue, value);
+}
+
 /**
  * @brief Handles incoming WebSocket input data.
  *
- * Processes bytes received from WebSocket clients and adds them to the RX queue.
+ * Processes bytes received from WebSocket clients with CPU monitor support.
+ * - Detects CTRL-M (ASCII 28) to toggle CPU mode
+ * - In CPU_RUNNING mode: queues input directly to RX queue
+ * - In CPU_STOPPED mode: accumulates input in command buffer until '\r'
  * Converts newline characters (\n) to carriage returns (\r).
- * If the queue is full, discards the oldest byte to make room.
  *
  * @param payload Pointer to incoming data bytes
  * @param payload_len Number of bytes in the payload
@@ -169,10 +159,20 @@ bool websocket_console_handle_input(const uint8_t* payload, size_t payload_len, 
 {
     (void)user_data;
 
-    if (!payload)
+    if (!payload || payload_len == 0)
     {
         return false;
     }
+
+    // Check for CTRL-M (ASCII 28) - toggle CPU mode
+    // The web terminal is configured to send 28 for CTRL-M to distinguish it from Enter (13)
+    if (payload[0] == 28)
+    {
+        CPU_OPERATING_MODE new_mode = cpu_state_toggle_mode();
+        return true;
+    }
+
+    CPU_OPERATING_MODE cpu_mode = cpu_state_get_mode();
 
     for (size_t i = 0; i < payload_len; ++i)
     {
@@ -181,13 +181,32 @@ bool websocket_console_handle_input(const uint8_t* payload, size_t payload_len, 
         {
             ch = '\r';
         }
-        if (!queue_try_add(&ws_rx_queue, &ch))
+
+        switch (cpu_mode)
         {
-            uint8_t discard = 0;
-            if (queue_try_remove(&ws_rx_queue, &discard))
-            {
-                queue_try_add(&ws_rx_queue, &ch);
-            }
+            case CPU_RUNNING:
+                if (!queue_try_add(&ws_rx_queue, &ch))
+                {
+                    uint8_t discard = 0;
+                    if (queue_try_remove(&ws_rx_queue, &discard))
+                    {
+                        queue_try_add(&ws_rx_queue, &ch);
+                    }
+                }
+                break;
+
+            case CPU_STOPPED:
+                if (!queue_try_add(&monitor_queue, &ch))
+                {
+                    uint8_t discard = 0;
+                    if (queue_try_remove(&monitor_queue, &discard))
+                    {
+                        queue_try_add(&monitor_queue, &ch);
+                    }
+                }
+                break;
+            default:
+                break;
         }
     }
 
@@ -283,6 +302,18 @@ void websocket_console_enqueue_output(uint8_t value)
  * @return false Always returns false (no input available)
  */
 bool websocket_console_try_dequeue_input(uint8_t* value)
+{
+    (void)value;
+    return false;
+}
+
+/**
+ * @brief Stub for dequeuing monitor input when WiFi is not available.
+ *
+ * @param value Unused pointer
+ * @return false Always returns false (no input available)
+ */
+bool websocket_console_try_dequeue_monitor_input(uint8_t* value)
 {
     (void)value;
     return false;

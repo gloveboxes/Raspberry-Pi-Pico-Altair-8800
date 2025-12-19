@@ -110,6 +110,8 @@ for BOARD in "${BOARDS[@]}"; do
 done
 
 TOTAL_END=$(date +%s)
+TOTAL_TIME=$((TOTAL_END - TOTAL_START))
+
 # Generate summary report
 REPORT_FILE="${TESTS_DIR}/build_report.txt"
 {

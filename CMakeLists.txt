@@ -16,11 +16,24 @@ option(ALTAIR_DEBUG "Enable debug logging" OFF)
 option(INKY_SUPPORT "Enable Pico Inky E-Ink display support" OFF)
 
 # Pico Display 2.8" support (off by default)
+# Pico Display 2.8" support (off by default)
 option(DISPLAY_2_8_SUPPORT "Enable Pico Display 2.8 inch LCD support" OFF)
+
+# SD Card support (on by default)
+option(SD_CARD_SUPPORT "Enable SD Card support" OFF)
 
 # Ensure only one display is enabled at a time
 if(INKY_SUPPORT AND DISPLAY_2_8_SUPPORT)
     message(FATAL_ERROR "Cannot enable both INKY_SUPPORT and DISPLAY_2_8_SUPPORT at the same time. Please choose one display type.")
+endif()
+
+# Warn about SD Card and Display 2.8 pin conflict
+if(SD_CARD_SUPPORT AND DISPLAY_2_8_SUPPORT)
+    message(WARNING "⚠️  SD_CARD_SUPPORT and DISPLAY_2_8_SUPPORT have a pin conflict!")
+    message(WARNING "    SD Card MISO (GPIO 16) conflicts with Display 2.8 DC (GPIO 16)")
+    message(WARNING "    This configuration will NOT work correctly.")
+    message(WARNING "    Choose either SD card OR Display 2.8, not both.")
+    message(FATAL_ERROR "Cannot enable both SD_CARD_SUPPORT and DISPLAY_2_8_SUPPORT due to pin conflict on GPIO 16.")
 endif()
 
 # Import Pico SDK
@@ -30,7 +43,7 @@ project(altair C CXX ASM)
 pico_sdk_init()
 
 # Import Pimoroni Pico libraries if Inky or Display 2.8 support is enabled
-if(INKY_SUPPORT OR DISPLAY_2_8_SUPPORT)
+if(INKY_SUPPORT OR DISPLAY_2_8_SUPPORT OR SD_CARD_SUPPORT)
     set(PIMORONI_PICO_PATH ${CMAKE_CURRENT_LIST_DIR}/lib/pimoroni-pico)
     include(${CMAKE_CURRENT_LIST_DIR}/lib/pimoroni-pico/pimoroni_pico_import.cmake)
     # Only build the drivers and libraries we need, not examples
@@ -68,7 +81,6 @@ set(ALTAIR_SOURCES
     i8080_disasm.c
     Altair8800/intel8080.c
     Altair8800/memory.c
-    Altair8800/pico_disk.c
     io_ports.c
     PortDrivers/time_io.c
     PortDrivers/utility_io.c
@@ -76,6 +88,13 @@ set(ALTAIR_SOURCES
     wifi_config.c
     comms_mgr.c
 )
+
+# Conditionally add disk controller based on SD card support
+if(SD_CARD_SUPPORT)
+    list(APPEND ALTAIR_SOURCES Altair8800/pico_88dcdd_sd_card.c)
+else()
+    list(APPEND ALTAIR_SOURCES Altair8800/pico_disk.c)
+endif()
 
 set(ALTAIR_LIBS)
 
@@ -133,6 +152,10 @@ if(DISPLAY_2_8_SUPPORT)
     target_compile_definitions(altair PRIVATE DISPLAY_2_8_SUPPORT=1)
 endif()
 
+if(SD_CARD_SUPPORT)
+    target_compile_definitions(altair PRIVATE SD_CARD_SUPPORT=1)
+endif()
+
 # Make sure all CYW43 headers are visible and include Altair8800 directory
 target_include_directories(altair PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}
@@ -184,6 +207,12 @@ if(DISPLAY_2_8_SUPPORT)
         pico_graphics   # Graphics library
         pico_display_28 # Pico Display 2.8 board definitions
         rgbled          # RGB LED driver
+    )
+endif()
+
+if(SD_CARD_SUPPORT)
+    target_link_libraries(altair
+        sdcard
     )
 endif()
 

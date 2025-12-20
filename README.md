@@ -43,6 +43,85 @@ For WiFi-enabled boards (Pico W, Pico 2 W):
 2. On boot the Pico W connects to Wi-Fi and starts a WebSocket console on port `8088`
 3. Point a browser at `http://<pico-ip>:8088/` to load the bundled console UI, or use any WebSocket-capable client (e.g., `wscat`) to connect to `ws://<pico-ip>:8088/` and interact with the Altair terminal alongside USB serial
 
+## SD Card Support
+
+### Pico Pins
+
+![](Docs/Media/pico-pins.png)
+
+### Overview
+
+The Altair 8800 emulator supports SD card storage for reading/writing disk images and other files. SD card support is optional and enabled with `-DSD_CARD_SUPPORT=ON` at compile time.
+
+### Hardware Wiring (Pololu SD Card Breakout)
+
+The SD card interface uses SPI0. Connect your Pololu SD card breakout board as follows:
+
+#### Pololu SD Card Breakout (Back View)
+![Pololu SD Card Back](Docs/Media/pololu-sd-card.jpeg)
+
+#### Visual Wiring Diagram
+
+Looking at the Pololu board from the back (as shown in image above), connect left-side pins to Pico:
+
+```
+Pololu SD Card (Back View)          Raspberry Pi Pico (Top View)
+Left Side Pins:                     Right Side of Board:
+
+  GND  ─────────────────────────────▶ Pin 38 (GND)      [bottom right]
+  VDD  ─────────────────────────────▶ Pin 36 (3V3 OUT)  [3 pins up from bottom]
+  DI   ─────────────────────────────▶ Pin 25 (GP19)     [near middle right]
+  DO   ◀────────────────────────────── Pin 21 (GP16)     [near middle right]
+  SCLK ─────────────────────────────▶ Pin 24 (GP18)     [near middle right]
+  CS   ─────────────────────────────▶ Pin 29 (GP22)     [lower right]
+  CD   (not connected)
+
+Right Side Pins (SDIO mode - not used):
+  DAT2 (not connected)
+  DAT1 (not connected)
+  IRQ  (not connected)
+```
+
+**Pro Tip:** Use female-to-female jumper wires. The Pololu board has male header pins, and the Pico can use female jumpers directly on the GPIO pins.
+
+### Pin Conflicts
+
+**⚠️ CRITICAL**: SD Card and Display 2.8 **CANNOT** be used together!
+
+| Peripheral | Pin Conflicts |
+|------------|---------------|
+| **Display 2.8** | **GPIO 16 CONFLICT**: SD Card uses MISO, Display uses DC |
+| **Inky Display** | ✅ No conflicts (uses I2C on different pins) |
+| **WiFi Module** | ✅ No conflicts (uses internal SPI bus on W variants) |
+
+The CMake configuration will prevent building with both `SD_CARD_SUPPORT` and `DISPLAY_2_8_SUPPORT` enabled.
+
+### SD Card Requirements
+
+- **Format**: FAT32 (FAT16 also supported)
+- **Size**: Up to 32GB recommended (SDHC cards)
+- **Card Type**: Standard SD or microSD with adapter
+
+### Usage
+
+The SD card is auto-mounted at startup. Place a `readme.md` or `README.MD` file in the root directory to have it displayed on boot.
+
+### Troubleshooting SD Card
+
+If you see "Failed to mount SD card, error: X":
+
+| Error | Code | Likely Cause |
+|-------|------|--------------|
+| FR_NOT_READY | 3 | No SD card inserted |
+| FR_NO_FILESYSTEM | 13 | Card not formatted as FAT32 |
+| FR_DISK_ERR | 1 | Pin conflicts or damaged card |
+
+**Common fixes:**
+1. Verify SD card is inserted and formatted as FAT32
+2. Check wiring matches pinout above
+3. Verify no pin conflicts (especially GPIO 16 with Display 2.8)
+4. Try a different SD card
+
 ## Selecting a Target Board
 
 `PICO_BOARD` now defaults to `pico2_w` (RP2350 Pico 2 W). Override it when configuring to target the non-W version or other boards:
@@ -60,6 +139,7 @@ cmake -B build -DPICO_BOARD=pico2 [...other flags...]
 | --- | --- | --- |
 | `-DINKY_SUPPORT=ON` | ON | Pulls in the Pimoroni Inky Pack driver and shows the welcome/IP screen. Set to `OFF` to save flash/RAM when the display isn't connected. |
 | `-DDISPLAY_2_8_SUPPORT=ON` | ON | Enables support for 2.8" display. Set to `OFF` if not using this display. |
+| `-DSD_CARD_SUPPORT=ON` | OFF | Enables SD Card support. Set to `ON` to enable. |
 | `-DPICO_BOARD=pico2_w` | pico2_w | Selects the Pico variant (e.g., `pico2`, `pico2_w`, `pico`, `pico_w`). WebSockets are automatically enabled for WiFi-capable boards. |
 | `-DCMAKE_BUILD_TYPE=Release` | Debug | Usual CMake switch for optimized builds (recommended). |
 
@@ -118,6 +198,9 @@ WebSocket support is automatically enabled for WiFi-capable boards (`pico_w` and
 - **Build for Pico 2 (Release)** - Raspberry Pi Pico 2 (no WiFi)
 - **Build for Pico 2 W (Release)** - Raspberry Pi Pico 2 W (with WiFi/WebSocket) *[Default]*
 - **Build for Pimoroni Pico Plus 2W (Release)** - Pimoroni Pico Plus 2 W (with WiFi/WebSocket)
+- **Build for Pico 2 W with SD Card (Release)** - Pico 2 W with SD card support
+- **Build for Pimoroni Pico Plus 2W with SD Card (Release)** - Pimoroni Pico Plus 2 W with SD card support
+- **Build for Pico W with Inky (Release)** - Pico W with Inky display support
 - **Build for Pico 2 W with Inky (Release)** - Pico 2 W with Inky display support
 - **Build for Pico 2 W with Display 2.8 (Release)** - Pico 2 W with 2.8" display support
 - **Build All Boards (Release)** - Builds for all supported boards
@@ -127,6 +210,9 @@ WebSocket support is automatically enabled for WiFi-capable boards (`pico_w` and
 - **Build and Deploy Pico W (Release)** - Build and deploy to Pico W
 - **Build and Deploy Pico 2 (Release)** - Build and deploy to Pico 2
 - **Build and Deploy Pico 2 W (Release)** - Build and deploy to Pico 2 W
+- **Build and Deploy Pico 2 W with SD Card (Release)** - Build and deploy Pico 2 W with SD card
+- **Build and Deploy Pimoroni Pico Plus 2W with SD Card (Release)** - Build and deploy Pimoroni with SD card
+- **Build and Deploy Pico W with Inky (Release)** - Build and deploy Pico W with Inky display
 - **Build and Deploy Pico 2 W with Inky (Release)** - Build and deploy Pico 2 W with Inky display
 - **Build and Deploy Pico 2 W with Display 2.8 (Release)** - Build and deploy Pico 2 W with 2.8" display
 

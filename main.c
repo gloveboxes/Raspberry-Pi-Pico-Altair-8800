@@ -1,15 +1,21 @@
 #include "Altair8800/intel8080.h"
 #include "Altair8800/memory.h"
+#ifdef SD_CARD_SUPPORT
+#include "Altair8800/pico_88dcdd_sd_card.h"
+#include "diskio.h"
+#include "drivers/sdcard/sdcard.h"
+#include "ff.h"
+#else
 #include "Altair8800/pico_disk.h"
+#endif
+#include "FrontPanels/display_2_8.h"
+#include "FrontPanels/inky_display.h"
 #include "build_version.h"
 #include "comms_mgr.h"
 #include "cpu_state.h"
-#include "FrontPanels/inky_display.h"
-#include "FrontPanels/display_2_8.h"
 #include "io_ports.h"
 #include "pico/error.h"
 #include "pico/stdlib.h"
-#include "wifi.h"
 #include "wifi_config.h"
 #include <stdio.h>
 #include <string.h>
@@ -17,9 +23,11 @@
 #define ASCII_MASK_7BIT 0x7F
 #define CTRL_KEY(ch) ((ch) & 0x1F)
 
-// Include the CPM disk image
+#ifndef SD_CARD_SUPPORT
+// Include the CPM disk image (only for embedded XIP disk controller)
 #include "Disks/blank_disk.h"
 #include "Disks/cpm63k_disk.h"
+#endif
 
 // WiFi connection status (global for Inky display)
 static bool g_wifi_ok = false;
@@ -298,10 +306,79 @@ int main(void)
 
     // Initialize disk controller
     printf("Initializing disk controller...\n");
+#ifdef SD_CARD_SUPPORT
+    sd_disk_init();
+#else
     pico_disk_init();
+#endif
 
+#ifdef SD_CARD_SUPPORT
+    // Initialize and mount SD card
+    printf("Initializing SD card...\n");
+    printf("SD Card pins: CS=22, SCK=18, MOSI=19, MISO=16\n");
+
+    static FATFS fs;
+    FRESULT fr = f_mount(&fs, "", 1); // Immediate mount (calls disk_initialize internally)
+
+    if (fr != FR_OK)
+    {
+        printf("Failed to mount SD card, error: %d\n", fr);
+        printf("Possible causes:\n");
+        printf("  - No SD card inserted\n");
+        printf("  - SD card not formatted as FAT32\n");
+        printf("  - Pin conflict with other peripherals\n");
+        return -1;
+    }
+
+    printf("SD card mounted successfully.\n");
+
+    // Load disk images from SD card
+    printf("Opening DISK_A: %s\n", DISK_A_PATH);
+    if (sd_disk_load(0, DISK_A_PATH))
+    {
+        printf("DISK_A opened successfully\n");
+    }
+    else
+    {
+        printf("DISK_A initialization failed!\n");
+        return -1;
+    }
+
+    printf("Opening DISK_B: %s\n", DISK_B_PATH);
+    if (sd_disk_load(1, DISK_B_PATH))
+    {
+        printf("DISK_B opened successfully\n");
+    }
+    else
+    {
+        printf("DISK_B initialization failed!\n");
+        return -1;
+    }
+
+    printf("Opening DISK_C: %s\n", DISK_C_PATH);
+    if (sd_disk_load(2, DISK_C_PATH))
+    {
+        printf("DISK_C opened successfully\n");
+    }
+    else
+    {
+        printf("DISK_C initialization failed!\n");
+        return -1;
+    }
+
+    printf("Opening DISK_D: %s\n", DISK_D_PATH);
+    if (sd_disk_load(3, DISK_D_PATH))
+    {
+        printf("DISK_D opened successfully\n");
+    }
+    else
+    {
+        printf("DISK_D initialization failed!\n");
+        return -1;
+    }
+#else
     // Load CPM disk image into drive 0 (DISK_A)
-    printf("Opening DISK_A: cpm63k.dsk\n");
+    printf("Opening DISK_A: cpm63k.dsk (embedded)\n");
     if (pico_disk_load(0, cpm63k_dsk, cpm63k_dsk_len))
     {
         printf("DISK_A opened successfully (%u bytes)\n", cpm63k_dsk_len);
@@ -313,7 +390,7 @@ int main(void)
     }
 
     // Load blank disk image into drive 1 (DISK_B)
-    printf("Opening DISK_B: blank.dsk\n");
+    printf("Opening DISK_B: blank.dsk (embedded)\n");
     if (pico_disk_load(1, blank_disk, blank_disk_len))
     {
         printf("DISK_B opened successfully (%u bytes)\n", blank_disk_len);
@@ -323,18 +400,28 @@ int main(void)
         printf("DISK_B initialization failed!\n");
         return -1;
     }
+#endif
 
     // Load disk boot loader ROM at 0xFF00 (ROM_LOADER_ADDRESS)
     printf("Loading disk boot loader ROM at 0xFF00...\n");
     loadDiskLoader(0xFF00);
 
     // Set up disk controller structure for CPU
+#ifdef SD_CARD_SUPPORT
+    static disk_controller_t disk_controller = {.disk_select = (port_out)sd_disk_select,
+                                                .disk_status = (port_in)sd_disk_status,
+                                                .disk_function = (port_out)sd_disk_function,
+                                                .sector = (port_in)sd_disk_sector,
+                                                .write = (port_out)sd_disk_write,
+                                                .read = (port_in)sd_disk_read};
+#else
     static disk_controller_t disk_controller = {.disk_select = (port_out)pico_disk_select,
                                                 .disk_status = (port_in)pico_disk_status,
                                                 .disk_function = (port_out)pico_disk_function,
                                                 .sector = (port_in)pico_disk_sector,
                                                 .write = (port_out)pico_disk_write,
                                                 .read = (port_in)pico_disk_read};
+#endif
 
     // Store reference for reset function
     g_disk_controller = &disk_controller;

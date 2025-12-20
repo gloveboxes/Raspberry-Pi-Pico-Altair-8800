@@ -31,7 +31,8 @@ fi
 echo ""
 
 # Array of boards to test
-BOARDS=("pico" "pico_w" "pico2" "pico2_w" "pimoroni_pico_plus2_w_rp2350" "pico2_w_inky" "pico2_display28" "pico2_w_display28")
+# Array of boards to test
+BOARDS=("pico" "pico_w" "pico_w_inky" "pico2" "pico2_w" "pico2_w_sd" "pimoroni_pico_plus2_w_rp2350" "pimoroni_pico_plus2_w_rp2350_sd" "pico2_w_inky" "pico2_display28" "pico2_w_display28")
 
 # Create tests directory
 TESTS_DIR="${SCRIPT_DIR}/tests"
@@ -61,7 +62,15 @@ for BOARD in "${BOARDS[@]}"; do
     # Remove display suffixes from PICO_BOARD
     CLEAN_BOARD="${BOARD//_inky/}"
     CLEAN_BOARD="${CLEAN_BOARD//_display28/}"
+    CLEAN_BOARD="${CLEAN_BOARD//_sd/}"
     CMAKE_OPTS="-DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=${CLEAN_BOARD} -DSKIP_VERSION_INCREMENT=1"
+    
+    # Configure SD Card Support
+    if [[ "$BOARD" == *"_sd" ]]; then
+        CMAKE_OPTS="$CMAKE_OPTS -DSD_CARD_SUPPORT=ON"
+    else
+        CMAKE_OPTS="$CMAKE_OPTS -DSD_CARD_SUPPORT=OFF"
+    fi
     
     # Add display support flags
     if [[ "$BOARD" == *"_inky" ]]; then

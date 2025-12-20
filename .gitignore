@@ -1,6 +1,7 @@
 # Build directory
 build/
 tests/
+.cache/
 
 # CMake
 CMakeLists.txt.user

@@ -6,6 +6,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -28,6 +29,19 @@ extern "C"
     //   cpu_running: true for green (running), false for red (stopped)
     void display_2_8_set_cpu_led(bool cpu_running);
 
+    // Initialize the front panel LED display mode
+    void display_2_8_init_front_panel(void);
+
+    // Show the Altair front panel LEDs
+    // Parameters:
+    //   address: 16-bit address bus (A15-A0)
+    //   data: 8-bit data bus (D7-D0)
+    //   status: 16-bit status word (bits 0-9 for status LEDs)
+    void display_2_8_show_front_panel(uint16_t address, uint8_t data, uint16_t status);
+
+    // Get display statistics
+    void display_2_8_get_stats(uint64_t* skipped_updates);
+
 #else
 
 // No-op stubs when Display 2.8 support is disabled
@@ -40,6 +54,13 @@ static inline void display_2_8_update(const char* ssid, const char* ip)
 static inline void display_2_8_set_cpu_led(bool cpu_running)
 {
     (void)cpu_running;
+}
+static inline void display_2_8_init_front_panel(void) {}
+static inline void display_2_8_show_front_panel(uint16_t address, uint8_t data, uint16_t status)
+{
+    (void)address;
+    (void)data;
+    (void)status;
 }
 
 #endif // DISPLAY_2_8_SUPPORT

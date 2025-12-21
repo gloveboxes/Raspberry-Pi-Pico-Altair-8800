@@ -77,7 +77,6 @@ set(ALTAIR_SOURCES
     cpu_state.c
     FrontPanels/virtual_monitor.c
     FrontPanels/inky_display.cpp
-    FrontPanels/display_2_8.cpp
     i8080_disasm.c
     Altair8800/intel8080.c
     Altair8800/memory.c
@@ -88,6 +87,15 @@ set(ALTAIR_SOURCES
     wifi_config.c
     comms_mgr.c
 )
+
+# Conditionally add Display 2.8 sources
+if(DISPLAY_2_8_SUPPORT)
+    list(APPEND ALTAIR_SOURCES
+        FrontPanels/display_2_8.c
+        FrontPanels/st7789_async.c
+    )
+endif()
+
 
 # Conditionally add disk controller based on SD card support
 if(SD_CARD_SUPPORT)

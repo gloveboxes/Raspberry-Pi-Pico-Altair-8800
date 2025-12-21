@@ -15,6 +15,7 @@
 #include "lwip/netif.h"
 #include "pico/cyw43_arch.h"
 #include "pico/multicore.h"
+#include "wifi.h"
 #include "wifi_config.h"
 #include "ws.h"
 
@@ -39,9 +40,11 @@ static bool wifi_init(void)
     if (cyw43_arch_init())
     {
         printf("[Core1] CYW43 init failed\n");
+        wifi_set_ready(false);
         return false;
     }
 
+    wifi_set_ready(true);
     cyw43_arch_enable_sta_mode();
 
     // Load credentials from flash storage
@@ -69,8 +72,11 @@ static bool wifi_init(void)
     if (err != 0)
     {
         printf("[Core1] Wi-Fi connect failed (err=%d)\n", err);
+        wifi_set_connected(false);
         return false;
     }
+
+    wifi_set_connected(true);
 
     // Get and store IP address
     struct netif* netif = netif_default;
@@ -80,6 +86,7 @@ static bool wifi_init(void)
         if (addr)
         {
             ip4addr_ntoa_r(addr, ip_address_buffer, sizeof(ip_address_buffer));
+            wifi_set_ip_address(ip_address_buffer); // Cache for display
         }
     }
 

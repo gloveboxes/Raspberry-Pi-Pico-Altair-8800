@@ -32,7 +32,7 @@ echo ""
 
 # Array of boards to test
 # Array of boards to test
-BOARDS=("pico" "pico_w" "pico_w_inky" "pico2" "pico2_w" "pico2_w_sd" "pimoroni_pico_plus2_w_rp2350" "pimoroni_pico_plus2_w_rp2350_sd" "pico2_w_inky" "pico2_display28" "pico2_w_display28")
+BOARDS=("pico" "pico_w" "pico_w_inky" "pico_display28" "pico2" "pico2_w" "pico2_w_sd" "pimoroni_pico_plus2_w_rp2350" "pimoroni_pico_plus2_w_rp2350_sd" "pimoroni_pico_plus2_w_rp2350_display28" "pico2_w_inky" "pico2_display28" "pico2_w_display28")
 
 # Create tests directory
 TESTS_DIR="${SCRIPT_DIR}/tests"

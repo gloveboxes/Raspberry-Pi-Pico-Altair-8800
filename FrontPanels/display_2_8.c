@@ -45,7 +45,7 @@ void display_2_8_show_front_panel(uint16_t address, uint8_t data, uint16_t statu
     const int LED_SIZE = 15;
     const int LED_SPACING_STATUS = 32;
     const int LED_SPACING_ADDRESS = 20;
-    const int LED_SPACING_DATA = 19;
+    const int LED_SPACING_DATA = 20;
 
     color_t LED_ON = rgb332(255, 0, 0);   // Bright red
     color_t LED_OFF = rgb332(40, 0, 0);   // Dark red

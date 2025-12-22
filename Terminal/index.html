@@ -64,19 +64,17 @@
       font-family: Courier New;
       font-size: 20px;
       margin: 0;
-      overflow: hidden;
       padding: 20px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      height: 100vh;
+      min-height: 100vh;
       box-sizing: border-box;
     }
 
     #terminal {
-      flex: 1;
       width: 100%;
-      height: 100%;
+      max-width: 100%;
       border: 2px solid #ffffff;
       box-sizing: border-box;
       padding: 0;
@@ -310,7 +308,6 @@
         cleanupInterval: null,
         reconnectTimer: null,
         userInitiatedDisconnect: false,
-        fitAddon: null,
         inputBuffer: [],
         inputTimer: null,
         encoder: new TextEncoder()
@@ -593,11 +590,8 @@
             theme: themeColors
           });
 
-          // Initialize and load the fit addon (optional but kept for height)
-          if (typeof FitAddon !== 'undefined') {
-            state.fitAddon = new FitAddon.FitAddon();
-            state.term.loadAddon(state.fitAddon);
-          }
+          // FitAddon removed to enforce fixed terminal dimensions (80 cols x 30 rows)
+          // This prevents the terminal from expanding beyond 30 rows on mobile devices
 
           if (!elements.terminal) {
             throw new Error("Terminal container not found");
@@ -605,17 +599,13 @@
 
           state.term.open(elements.terminal);
 
-          // Apply fit after opening to adjust height, but we want 80 cols
-          // Some versions of fit will respect container width if terminal is smaller
-          // but to be safe we'll re-set cols after fit or just let it be.
-          if (state.fitAddon) {
-            setTimeout(() => state.fitAddon.fit(), 100);
-          }
+          // Enforce fixed dimensions after opening
+          state.term.resize(CONFIG.XTERM_COLS, CONFIG.XTERM_ROWS);
 
-          // Handle window resize
+          // Handle window resize - maintain fixed dimensions
           window.addEventListener('resize', () => {
-            if (state.fitAddon) {
-              state.fitAddon.fit();
+            if (state.term) {
+              state.term.resize(CONFIG.XTERM_COLS, CONFIG.XTERM_ROWS);
             }
           });
           updateThemeButton(initialTheme === "light" ? "Dark" : "Light");

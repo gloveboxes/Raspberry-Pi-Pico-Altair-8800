@@ -26,9 +26,13 @@ void ws_poll_incoming(void);
 void ws_poll_outgoing(void);
 
 // Poll the WebSocket server for incoming and outgoing messages (internal use)
-static inline void ws_poll(volatile bool* pending_ws_output)
+static inline void ws_poll(volatile bool* pending_ws_input, volatile bool* pending_ws_output)
 {
-    ws_poll_incoming();
+    if (*pending_ws_input)
+    {
+        *pending_ws_input = false;
+        ws_poll_incoming();
+    }
     if (*pending_ws_output)
     {
         *pending_ws_output = false;

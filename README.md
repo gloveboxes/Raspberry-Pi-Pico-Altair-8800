@@ -143,6 +143,36 @@ cmake -B build -DPICO_BOARD=pico2 [...other flags...]
 | `-DPICO_BOARD=pico2_w` | pico2_w | Selects the Pico variant (e.g., `pico2`, `pico2_w`, `pico`, `pico_w`). WebSockets are automatically enabled for WiFi-capable boards. |
 | `-DCMAKE_BUILD_TYPE=Release` | Debug | Usual CMake switch for optimized builds (recommended). |
 
+## OpenAI API Configuration
+
+The OpenAI integration requires an API key to be set at build time. The key is **not** hardcoded in the source.
+
+### Setting the API Key
+
+Add the following to your `~/.zprofile` (or `~/.zshrc`):
+
+```bash
+export OPENAI_API_KEY="sk-proj-your-api-key-here"
+```
+
+Then reload your shell configuration:
+
+```bash
+source ~/.zprofile
+```
+
+### Verification
+
+When you configure CMake, you should see:
+
+```
+-- OpenAI API key loaded from environment variable
+```
+
+If the API key is not set, you'll see a warning but the build will still succeed (the firmware will have an empty API key and won't be able to connect to OpenAI).
+
+For more details, see [OPENAI_API_KEY.md](OPENAI_API_KEY.md).
+
 ## Regenerate Disk Image Header
 
 1. Copy the .dsk file to the disks folder

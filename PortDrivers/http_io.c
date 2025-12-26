@@ -40,6 +40,10 @@
 #define OUTBOUND_QUEUE_SIZE 4
 #define INBOUND_QUEUE_SIZE 2 // Small queue creates TCP backpressure
 
+// Timeout and retry configuration
+#define HTTP_TRANSFER_TIMEOUT_MS 30000 // 30 second timeout
+#define QUEUE_RETRY_LIMIT 10000        // Max retries before giving up (~1 second at 100us)
+
 // HTTP request message (Core 0 -> Core 1)
 typedef struct
 {
@@ -58,11 +62,13 @@ typedef struct
 // State for HTTP transfer (Core 1)
 typedef struct
 {
-    bool transfer_active;
-    bool transfer_complete;
+    volatile bool transfer_active;
+    volatile bool transfer_complete;
     http_response_t current_chunk;
     size_t total_bytes_received;
-    struct altcp_pcb* conn; // TCP connection for flow control
+    size_t unacked_bytes;       // Track bytes not yet ACKed to TCP
+    absolute_time_t start_time; // For timeout detection
+    struct altcp_pcb* conn;     // TCP connection for flow control
 } http_transfer_state_t;
 
 // State for port handling (Core 0)
@@ -101,7 +107,7 @@ void http_io_init(void)
     port_state.status = WG_EOF;
 }
 
-size_t http_output(int port, uint8_t data, char* buffer, size_t buffer_length)
+size_t http_output(uint8_t port, uint8_t data, char* buffer, size_t buffer_length)
 {
     size_t len = 0;
 
@@ -249,6 +255,34 @@ uint8_t http_input(uint8_t port)
 
 // === CORE 1: HTTP Client ===
 
+// Helper to drain queues during abort/cleanup
+static void drain_queues(void)
+{
+    http_response_t resp_dummy;
+    while (queue_try_remove(&inbound_queue, &resp_dummy))
+    {
+    }
+
+    http_request_t req_dummy;
+    while (queue_try_remove(&outbound_queue, &req_dummy))
+    {
+    }
+}
+
+// Try to add to queue with bounded retries. Returns true on success.
+static bool queue_try_add_with_retry(queue_t* queue, const void* data)
+{
+    for (int i = 0; i < QUEUE_RETRY_LIMIT; i++)
+    {
+        if (queue_try_add(queue, data))
+        {
+            return true;
+        }
+        sleep_us(100);
+    }
+    return false;
+}
+
 // lwIP HTTP client callback: receive data
 static err_t http_recv_callback(void* arg, struct altcp_pcb* conn, struct pbuf* p, err_t err)
 {
@@ -296,19 +330,18 @@ static err_t http_recv_callback(void* arg, struct altcp_pcb* conn, struct pbuf* 
             {
                 state->current_chunk.status = WG_DATAREADY;
 
-                // FLOW CONTROL: Block until queue has room
-                // This creates TCP backpressure - we won't return from callback
-                // until there's room, so TCP window won't open for more data
-                while (!queue_try_add(&inbound_queue, &state->current_chunk))
+                // FLOW CONTROL: Try to add with bounded retries
+                if (queue_try_add_with_retry(&inbound_queue, &state->current_chunk))
                 {
-                    // Queue full - yield to let Altair consume on Core 0
-                    // While we're blocked here, TCP won't get more ACKs
-                    sleep_us(100);
+                    // ACK only after successfully queuing (flow control)
+                    altcp_recved(conn, CHUNK_SIZE);
+                    bytes_acked += CHUNK_SIZE;
                 }
-
-                // ACK only after successfully queuing (flow control)
-                altcp_recved(conn, CHUNK_SIZE);
-                bytes_acked += CHUNK_SIZE;
+                else
+                {
+                    // Queue full after retries - track unacked bytes for later
+                    state->unacked_bytes += CHUNK_SIZE;
+                }
 
                 // Reset chunk for next data
                 memset(&state->current_chunk, 0, sizeof(state->current_chunk));
@@ -321,12 +354,12 @@ static err_t http_recv_callback(void* arg, struct altcp_pcb* conn, struct pbuf* 
 
     state->total_bytes_received += p->tot_len;
 
-    // ACK remaining bytes that weren't part of a full chunk
+    // Track remaining bytes that weren't part of a full chunk
+    // These will be ACKed when the transfer completes
     size_t remaining = p->tot_len - bytes_acked;
-    if (remaining > 0 && state->current_chunk.len > 0)
+    if (remaining > 0)
     {
-        // Don't ACK partial chunk data yet - wait until we have a full chunk
-        // or until transfer completes
+        state->unacked_bytes += remaining;
     }
 
     pbuf_free(p);
@@ -339,9 +372,9 @@ static err_t http_headers_done_callback(httpc_state_t* connection, void* arg, st
                                         u32_t content_len)
 {
     (void)connection;
+    (void)arg;
     (void)hdr;
     (void)hdr_len;
-    // Headers received - content length available
     (void)content_len;
     return ERR_OK;
 }
@@ -349,23 +382,26 @@ static err_t http_headers_done_callback(httpc_state_t* connection, void* arg, st
 // lwIP HTTP client callback: transfer complete
 static void http_result_callback(void* arg, httpc_result_t httpc_result, u32_t rx_content_len, u32_t srv_res, err_t err)
 {
+    (void)rx_content_len;
+    (void)err;
+
     http_transfer_state_t* state = (http_transfer_state_t*)arg;
+
+    // ACK any remaining unacked bytes before cleanup
+    if (state->unacked_bytes > 0 && state->conn != NULL)
+    {
+        altcp_recved(state->conn, state->unacked_bytes);
+        state->unacked_bytes = 0;
+    }
 
     // Send final chunk if there's data
     if (state->current_chunk.len > 0)
     {
-        if (httpc_result == HTTPC_RESULT_OK)
-        {
-            state->current_chunk.status = WG_DATAREADY;
-        }
-        else
-        {
-            state->current_chunk.status = WG_FAILED;
-        }
+        state->current_chunk.status = (httpc_result == HTTPC_RESULT_OK) ? WG_DATAREADY : WG_FAILED;
 
-        while (!queue_try_add(&inbound_queue, &state->current_chunk))
+        if (!queue_try_add_with_retry(&inbound_queue, &state->current_chunk))
         {
-            sleep_us(100);
+            // Failed to queue final chunk - data loss, but we must complete
         }
     }
 
@@ -383,9 +419,9 @@ static void http_result_callback(void* arg, httpc_result_t httpc_result, u32_t r
     }
 
     final.len = 0;
-    while (!queue_try_add(&inbound_queue, &final))
+    if (!queue_try_add_with_retry(&inbound_queue, &final))
     {
-        sleep_us(100);
+        // Failed to queue final status - consumer may hang waiting
     }
 
     state->transfer_active = false;
@@ -474,6 +510,25 @@ static int parse_url(const char* url, char* hostname, size_t hostname_len, u16_t
 
 void http_poll(void)
 {
+    // Check for transfer timeout
+    if (transfer_state.transfer_active)
+    {
+        int64_t elapsed_us = absolute_time_diff_us(transfer_state.start_time, get_absolute_time());
+        if (elapsed_us > (int64_t)HTTP_TRANSFER_TIMEOUT_MS * 1000)
+        {
+            // Timeout - send failure and cleanup
+            http_response_t response;
+            memset(&response, 0, sizeof(response));
+            response.status = WG_FAILED;
+            response.len = 0;
+            queue_try_add(&inbound_queue, &response);
+
+            transfer_state.transfer_active = false;
+            transfer_state.transfer_complete = true;
+            return;
+        }
+    }
+
     // Check for new HTTP requests from Core 0
     http_request_t request;
 
@@ -481,7 +536,9 @@ void http_poll(void)
     {
         if (request.abort)
         {
-            // TODO: Implement abort logic if needed
+            // Proper abort cleanup
+            drain_queues();
+            memset(&transfer_state, 0, sizeof(transfer_state));
             transfer_state.transfer_active = false;
             return;
         }
@@ -502,14 +559,10 @@ void http_poll(void)
             return;
         }
 
-        // Build full URL for lwIP (hostname/path, port separate)
-        char full_url[256];
-        snprintf(full_url, sizeof(full_url), "%s%s", hostname, path);
-        (void)full_url; // Used for debugging if needed
-
         // Reset transfer state
         memset(&transfer_state, 0, sizeof(transfer_state));
         transfer_state.transfer_active = true;
+        transfer_state.start_time = get_absolute_time();
 
         // Configure HTTP client settings
         httpc_connection_t settings;
@@ -548,7 +601,7 @@ void http_io_init(void)
     // No-op on non-WiFi boards
 }
 
-size_t http_output(int port, uint8_t data, char* buffer, size_t buffer_length)
+size_t http_output(uint8_t port, uint8_t data, char* buffer, size_t buffer_length)
 {
     (void)port;
     (void)data;

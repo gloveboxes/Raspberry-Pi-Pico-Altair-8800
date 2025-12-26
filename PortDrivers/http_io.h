@@ -21,7 +21,7 @@ void http_io_init(void);
  * @param buffer_length Size of output buffer
  * @return Number of bytes written to buffer
  */
-size_t http_output(int port, uint8_t data, char* buffer, size_t buffer_length);
+size_t http_output(uint8_t port, uint8_t data, char* buffer, size_t buffer_length);
 
 /**
  * HTTP port input handler

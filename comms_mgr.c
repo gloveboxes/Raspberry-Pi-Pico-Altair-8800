@@ -7,6 +7,7 @@
 #include "pico/stdlib.h"
 
 #include "PortDrivers/http_io.h"
+#include "PortDrivers/openai_io.h"
 #include "websocket_console.h"
 
 // Enable WiFi/WebSocket functionality only if board has WiFi capability
@@ -130,7 +131,8 @@ void websocket_console_start(void)
     }
 
     websocket_queue_init();
-    http_io_init(); // Initialize HTTP file transfer queues
+    http_io_init();   // Initialize HTTP file transfer queues
+    openai_io_init(); // Initialize OpenAI chat queues
 
     // Start the WebSocket output timer (20ms interval)
     add_repeating_timer_ms(WS_OUTPUT_TIMER_INTERVAL_MS, ws_output_timer_callback, NULL, &ws_output_timer);
@@ -207,7 +209,8 @@ static void websocket_console_core1_entry(void)
     {
         cyw43_arch_poll();
         ws_poll(&pending_ws_input, &pending_ws_output);
-        http_poll(); // Poll for HTTP file transfer requests
+        http_poll();   // Poll for HTTP file transfer requests
+        openai_poll(); // Poll for OpenAI chat requests
         tight_loop_contents();
     }
 }

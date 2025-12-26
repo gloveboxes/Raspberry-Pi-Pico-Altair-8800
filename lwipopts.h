@@ -54,6 +54,20 @@
 #define DHCP_DOES_ARP_CHECK 0       // Disable ARP check on offered DHCP address
 #define LWIP_DHCP_DOES_ACD_CHECK 0  // Disable Address Conflict Detection
 
+// ALTCP (Application Layered TCP) - Required for TLS support
+#define LWIP_ALTCP 1             // Enable Application Layered TCP
+#define LWIP_ALTCP_TLS 1         // Enable TLS support for ALTCP
+#define LWIP_ALTCP_TLS_MBEDTLS 1 // Use mbedtls as TLS backend
+
+// TLS memory configuration - mbedtls requires significant memory
+// Increase heap size to accommodate TLS handshake buffers
+#undef MEM_SIZE
+#define MEM_SIZE 32000 // Increased from 16000 for TLS buffers
+
+// Additional TCP PCBs for TLS connections
+#undef MEMP_NUM_TCP_PCB
+#define MEMP_NUM_TCP_PCB 20 // Increased from 16 for TLS connections
+
 #ifndef NDEBUG
 #define LWIP_DEBUG 1         // Enable debug output in debug builds
 #define LWIP_STATS 1         // Enable statistics collection in debug builds

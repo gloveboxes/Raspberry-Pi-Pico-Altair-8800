@@ -12,6 +12,17 @@ endif()
 # Debug option (off by default)
 option(ALTAIR_DEBUG "Enable debug logging" OFF)
 
+# OpenAI API Key configuration
+# Set via environment variable: export OPENAI_API_KEY="sk-..."
+if(DEFINED ENV{OPENAI_API_KEY})
+    set(OPENAI_API_KEY "$ENV{OPENAI_API_KEY}" CACHE STRING "OpenAI API Key from environment")
+    message(STATUS "OpenAI API key loaded from environment variable")
+else()
+    set(OPENAI_API_KEY "" CACHE STRING "OpenAI API Key (set via environment or CMake)")
+    message(WARNING "⚠️  OPENAI_API_KEY not set! Set environment variable before building.")
+    message(WARNING "    Example: export OPENAI_API_KEY=\"sk-...\"")
+endif()
+
 # Pico Inky support (off by default)
 option(INKY_SUPPORT "Enable Pico Inky E-Ink display support" OFF)
 
@@ -84,6 +95,8 @@ set(ALTAIR_SOURCES
     PortDrivers/time_io.c
     PortDrivers/utility_io.c
     PortDrivers/http_io.c
+    PortDrivers/openai_io.c
+    PortDrivers/parson.c
     websocket_console.c
     wifi_config.c
     comms_mgr.c
@@ -155,6 +168,9 @@ add_dependencies(altair generate_version)
 if(ALTAIR_DEBUG)
     target_compile_definitions(altair PRIVATE ALTAIR_DEBUG=1)
 endif()
+
+# Add OpenAI API key (always define, even if empty)
+target_compile_definitions(altair PRIVATE OPENAI_API_KEY="${OPENAI_API_KEY}")
 
 # Add Inky support definition if enabled
 if(INKY_SUPPORT)

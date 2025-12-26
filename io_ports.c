@@ -1,6 +1,7 @@
 #include "io_ports.h"
 
 #include "PortDrivers/http_io.h"
+#include "PortDrivers/openai_io.h"
 #include "PortDrivers/time_io.h"
 #include "PortDrivers/utility_io.h"
 #include <stdio.h>
@@ -44,6 +45,13 @@ void io_port_out(uint8_t port, uint8_t data)
         case 114:
             request_unit.len = http_output(port, data, request_unit.buffer, sizeof(request_unit.buffer));
             break;
+        case 120: // OpenAI: Reset request buffer
+        case 121: // OpenAI: Add byte to request buffer
+        case 122: // OpenAI: Reset response buffer
+        case 126: // OpenAI: Set content length low byte
+        case 127: // OpenAI: Set content length high byte
+            request_unit.len = openai_output(port, data, request_unit.buffer, sizeof(request_unit.buffer));
+            break;
         default:
             break;
     }
@@ -64,6 +72,13 @@ uint8_t io_port_in(uint8_t port)
         case 33:
         case 201:
             return http_input(port);
+        case 120: // OpenAI: Trigger API call / get status
+        case 121: // OpenAI: Get buffer length low byte
+        case 122: // OpenAI: Get buffer length high byte
+        case 123: // OpenAI: Get status (EOF/WAITING/DATA_READY)
+        case 124: // OpenAI: Read response byte
+        case 125: // OpenAI: Check if stream complete
+            return openai_input(port);
         case 200:
             if (request_unit.count < request_unit.len && request_unit.count < sizeof(request_unit.buffer))
             {

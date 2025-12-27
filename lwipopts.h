@@ -24,7 +24,7 @@
 #define MEMP_NUM_ARP_QUEUE 10     // Number of packets queued waiting for ARP resolution
 #define MEMP_NUM_TCP_PCB 16       // Number of simultaneously active TCP connections - Increased to handle TIME_WAIT
 #define MEMP_NUM_TCP_PCB_LISTEN 5 // Number of listening TCP connections - Increased to prevent lockout
-#define PBUF_POOL_SIZE 48         // Number of buffers in the pbuf pool - Increased to handle overlap
+#define PBUF_POOL_SIZE 24         // Number of buffers in the pbuf pool - Reduced for memory savings
 #define LWIP_ARP 1                // Enable ARP protocol
 #define LWIP_ETHERNET 1           // Enable Ethernet support
 #define LWIP_ICMP 1               // Enable ICMP protocol (ping)

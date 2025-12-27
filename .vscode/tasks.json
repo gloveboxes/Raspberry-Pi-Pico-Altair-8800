@@ -253,7 +253,6 @@
                 "$gcc"
             ]
         },
-
         {
             "label": "Build for Pico 2 W with Display 2.8 (Release)",
             "type": "shell",
@@ -318,6 +317,54 @@
             "label": "Build and Deploy Pimoroni Pico Plus 2W with Display 2.8 (Release)",
             "type": "shell",
             "command": "cmake -B build -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=pimoroni_pico_plus2_w_rp2350 -DINKY_SUPPORT=OFF -DDISPLAY_2_8_SUPPORT=ON && cmake --build build -j && mkdir -p Releases && cp build/altair.uf2 Releases/altair_pimoroni_pico_plus2_w_rp2350_display28.uf2 && echo '\\n🔄 Rebooting Pico into BOOTSEL mode...' && picotool reboot -f -u && sleep 2 && echo '📤 Uploading firmware...' && picotool load -x build/altair.uf2 -f && echo '✅ Firmware deployed and running!'",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Build for Pimoroni Pico Plus 2W with Waveshare 3.5 + SD Card (Release)",
+            "type": "shell",
+            "command": "cmake -B build -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=pimoroni_pico_plus2_w_rp2350 -DWAVESHARE_3_5_DISPLAY=ON -DSD_CARD_SUPPORT=ON && cmake --build build -j && mkdir -p Releases && cp build/altair.uf2 Releases/altair_pimoroni_pico_plus2_w_rp2350_waveshare35_sd.uf2",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Build and Deploy Pimoroni Pico Plus 2W with Waveshare 3.5 + SD Card (Release)",
+            "type": "shell",
+            "command": "cmake -B build -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=pimoroni_pico_plus2_w_rp2350 -DWAVESHARE_3_5_DISPLAY=ON -DSD_CARD_SUPPORT=ON && cmake --build build -j && mkdir -p Releases && cp build/altair.uf2 Releases/altair_pimoroni_pico_plus2_w_rp2350_waveshare35_sd.uf2 && echo '\\n🔄 Rebooting Pico into BOOTSEL mode...' && picotool reboot -f -u && sleep 2 && echo '📤 Uploading firmware...' && picotool load -x build/altair.uf2 -f && echo '✅ Firmware deployed and running!'",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Build for Pico 2 W with Waveshare 3.5 + SD Card (Release)",
+            "type": "shell",
+            "command": "cmake -B build -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=pico2_w -DWAVESHARE_3_5_DISPLAY=ON -DSD_CARD_SUPPORT=ON && cmake --build build -j && mkdir -p Releases && cp build/altair.uf2 Releases/altair_pico2_w_waveshare35_sd.uf2",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Build and Deploy Pico 2 W with Waveshare 3.5 + SD Card (Release)",
+            "type": "shell",
+            "command": "cmake -B build -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=pico2_w -DWAVESHARE_3_5_DISPLAY=ON -DSD_CARD_SUPPORT=ON && cmake --build build -j && mkdir -p Releases && cp build/altair.uf2 Releases/altair_pico2_w_waveshare35_sd.uf2 && echo '\\n🔄 Rebooting Pico into BOOTSEL mode...' && picotool reboot -f -u && sleep 2 && echo '📤 Uploading firmware...' && picotool load -x build/altair.uf2 -f && echo '✅ Firmware deployed and running!'",
             "options": {
                 "cwd": "${workspaceFolder}"
             },

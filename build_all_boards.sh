@@ -32,7 +32,7 @@ echo ""
 
 # Array of boards to test
 # Array of boards to test
-BOARDS=("pico" "pico_w" "pico_w_inky" "pico_display28" "pico2" "pico2_w" "pico2_w_sd" "pimoroni_pico_plus2_w_rp2350" "pimoroni_pico_plus2_w_rp2350_sd" "pimoroni_pico_plus2_w_rp2350_display28" "pico2_w_inky" "pico2_display28" "pico2_w_display28")
+BOARDS=("pico" "pico_w" "pico_w_inky" "pico_display28" "pico2" "pico2_w" "pico2_w_sd" "pimoroni_pico_plus2_w_rp2350" "pimoroni_pico_plus2_w_rp2350_sd" "pimoroni_pico_plus2_w_rp2350_display28" "pimoroni_pico_plus2_w_rp2350_waveshare35_sd" "pico2_w_inky" "pico2_display28" "pico2_w_display28")
 
 # Create tests directory
 TESTS_DIR="${SCRIPT_DIR}/tests"
@@ -62,14 +62,20 @@ for BOARD in "${BOARDS[@]}"; do
     # Remove display suffixes from PICO_BOARD
     CLEAN_BOARD="${BOARD//_inky/}"
     CLEAN_BOARD="${CLEAN_BOARD//_display28/}"
+    CLEAN_BOARD="${CLEAN_BOARD//_waveshare35_sd/}"
     CLEAN_BOARD="${CLEAN_BOARD//_sd/}"
     CMAKE_OPTS="-DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=${CLEAN_BOARD} -DSKIP_VERSION_INCREMENT=1"
     
     # Configure SD Card Support
-    if [[ "$BOARD" == *"_sd" ]]; then
+    if [[ "$BOARD" == *"_sd" ]] || [[ "$BOARD" == *"_waveshare35_sd" ]]; then
         CMAKE_OPTS="$CMAKE_OPTS -DSD_CARD_SUPPORT=ON"
     else
         CMAKE_OPTS="$CMAKE_OPTS -DSD_CARD_SUPPORT=OFF"
+    fi
+    
+    # Add Waveshare 3.5" display support
+    if [[ "$BOARD" == *"_waveshare35_sd" ]]; then
+        CMAKE_OPTS="$CMAKE_OPTS -DWAVESHARE_3_5_DISPLAY=ON"
     fi
     
     # Add display support flags

@@ -22,13 +22,18 @@ option(DISPLAY_2_8_SUPPORT "Enable Pico Display 2.8 inch LCD support" OFF)
 # SD Card support (on by default)
 option(SD_CARD_SUPPORT "Enable SD Card support" OFF)
 
+# Waveshare 3.5" display support (off by default)
+# This display uses spi1 with different pins than Pimoroni displays
+option(WAVESHARE_3_5_DISPLAY "Enable Waveshare 3.5 inch LCD support (uses spi1)" OFF)
+
 # Ensure only one display is enabled at a time
 if(INKY_SUPPORT AND DISPLAY_2_8_SUPPORT)
     message(FATAL_ERROR "Cannot enable both INKY_SUPPORT and DISPLAY_2_8_SUPPORT at the same time. Please choose one display type.")
 endif()
 
-# Warn about SD Card and Display 2.8 pin conflict
-if(SD_CARD_SUPPORT AND DISPLAY_2_8_SUPPORT)
+# Warn about SD Card and Display 2.8 pin conflict (only when NOT using Waveshare)
+# Waveshare 3.5" display shares SPI with SD card on spi1, so no conflict
+if(SD_CARD_SUPPORT AND DISPLAY_2_8_SUPPORT AND NOT WAVESHARE_3_5_DISPLAY)
     message(WARNING "⚠️  SD_CARD_SUPPORT and DISPLAY_2_8_SUPPORT have a pin conflict!")
     message(WARNING "    SD Card MISO (GPIO 16) conflicts with Display 2.8 DC (GPIO 16)")
     message(WARNING "    This configuration will NOT work correctly.")
@@ -168,6 +173,22 @@ endif()
 
 if(SD_CARD_SUPPORT)
     target_compile_definitions(altair PRIVATE SD_CARD_SUPPORT=1)
+    
+    # Waveshare 3.5" display uses spi1 with different SD card pins
+    if(WAVESHARE_3_5_DISPLAY)
+        message(STATUS "📀 Configuring SD card for Waveshare 3.5\" display (spi1, GPIO 10/11/12/22)")
+        target_compile_definitions(altair PRIVATE
+            SDCARD_SPI_BUS=spi1
+            SDCARD_PIN_SPI0_SCK=10
+            SDCARD_PIN_SPI0_MOSI=11
+            SDCARD_PIN_SPI0_MISO=12
+            SDCARD_PIN_SPI0_CS=22
+        )
+    endif()
+endif()
+
+if(WAVESHARE_3_5_DISPLAY)
+    target_compile_definitions(altair PRIVATE WAVESHARE_3_5_DISPLAY=1)
 endif()
 
 # Make sure all CYW43 headers are visible and include Altair8800 directory
@@ -228,6 +249,18 @@ if(SD_CARD_SUPPORT)
     target_link_libraries(altair
         sdcard
     )
+    
+    # Waveshare 3.5" display uses spi1 with different SD card pins
+    # Must add definitions to sdcard INTERFACE library for them to take effect
+    if(WAVESHARE_3_5_DISPLAY)
+        target_compile_definitions(sdcard INTERFACE
+            SDCARD_SPI_BUS=spi1
+            SDCARD_PIN_SPI0_SCK=10
+            SDCARD_PIN_SPI0_MOSI=11
+            SDCARD_PIN_SPI0_MISO=12
+            SDCARD_PIN_SPI0_CS=22
+        )
+    endif()
 endif()
 
 # Generate .uf2, .elf, etc.

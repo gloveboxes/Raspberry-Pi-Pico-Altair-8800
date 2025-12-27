@@ -2,6 +2,7 @@
 build/
 tests/
 .cache/
+context/
 
 # CMake
 CMakeLists.txt.user

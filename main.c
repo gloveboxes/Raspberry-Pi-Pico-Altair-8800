@@ -350,7 +350,17 @@ int main(void)
 #ifdef SD_CARD_SUPPORT
     // Initialize and mount SD card
     printf("Initializing SD card...\n");
-    printf("SD Card pins: CS=22, SCK=18, MOSI=19, MISO=16\n");
+
+#ifdef WAVESHARE_3_5_DISPLAY
+    // Waveshare 3.5" display shares SPI1 with LCD (CS=9), Touch (CS=16), and SD (CS=22)
+    // We must ensure LCD and Touch CS pins are HIGH to prevent SPI bus interference
+    gpio_init(9);
+    gpio_set_dir(9, GPIO_OUT);
+    gpio_put(9, 1); // Deselect LCD
+    gpio_init(16);
+    gpio_set_dir(16, GPIO_OUT);
+    gpio_put(16, 1); // Deselect Touch
+#endif
 
     static FATFS fs;
     FRESULT fr = f_mount(&fs, "", 1); // Immediate mount (calls disk_initialize internally)

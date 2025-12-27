@@ -51,6 +51,15 @@ pico_sdk_init()
 if(INKY_SUPPORT OR DISPLAY_2_8_SUPPORT OR SD_CARD_SUPPORT)
     set(PIMORONI_PICO_PATH ${CMAKE_CURRENT_LIST_DIR}/lib/pimoroni-pico)
     include(${CMAKE_CURRENT_LIST_DIR}/lib/pimoroni-pico/pimoroni_pico_import.cmake)
+    
+    # Add local sdcard/fatfs drivers BEFORE pimoroni-pico drivers
+    # This ensures our local copies are used instead of the submodule versions
+    # (the cmake files use "if (NOT TARGET ...)" guards so first definition wins)
+    if(SD_CARD_SUPPORT)
+        add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/drivers/fatfs local-drivers/fatfs)
+        add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/drivers/sdcard local-drivers/sdcard)
+    endif()
+    
     # Only build the drivers and libraries we need, not examples
     add_subdirectory(${PIMORONI_PICO_PATH}/common pimoroni-pico/common)
     add_subdirectory(${PIMORONI_PICO_PATH}/drivers pimoroni-pico/drivers)

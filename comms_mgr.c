@@ -136,14 +136,6 @@ void websocket_console_start(void)
     websocket_queue_init();
     http_io_init(); // Initialize HTTP file transfer queues
 
-    // Start the WebSocket output timer (20ms fixed interval)
-    add_repeating_timer_ms(-WS_OUTPUT_TIMER_INTERVAL_MS, ws_output_timer_callback, NULL, &ws_output_timer);
-    printf("Started WebSocket output timer (%dms interval)\n", WS_OUTPUT_TIMER_INTERVAL_MS);
-
-    // Start the WebSocket input timer (10ms fixed interval)
-    add_repeating_timer_ms(-WS_INPUT_TIMER_INTERVAL_MS, ws_input_timer_callback, NULL, &ws_input_timer);
-    printf("Started WebSocket input timer (%dms interval)\n", WS_INPUT_TIMER_INTERVAL_MS);
-
     // Launch core 1 which will handle all Wi-Fi and WebSocket operations
     multicore_launch_core1(websocket_console_core1_entry);
     console_running = true;
@@ -201,6 +193,13 @@ static void websocket_console_core1_entry(void)
         printf("[Core1] Failed to start WebSocket server\n");
         return;
     }
+
+    // Start WebSocket timers on Core 1 (after WiFi init)
+    add_repeating_timer_ms(-WS_OUTPUT_TIMER_INTERVAL_MS, ws_output_timer_callback, NULL, &ws_output_timer);
+    printf("[Core1] Started WebSocket output timer (%dms interval)\n", WS_OUTPUT_TIMER_INTERVAL_MS);
+
+    add_repeating_timer_ms(-WS_INPUT_TIMER_INTERVAL_MS, ws_input_timer_callback, NULL, &ws_input_timer);
+    printf("[Core1] Started WebSocket input timer (%dms interval)\n", WS_INPUT_TIMER_INTERVAL_MS);
 
     // Mark console as initialized only after successful network stack initialization
     console_initialized = true;

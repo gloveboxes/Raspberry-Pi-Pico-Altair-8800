@@ -1,4 +1,5 @@
 #include "http_io.h"
+#include "http_get.h"
 
 #include "pico/stdlib.h" // Must be included before WiFi check to get board definitions
 
@@ -8,13 +9,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "lwip/altcp.h"
-#include "lwip/apps/http_client.h"
-#include "lwip/dns.h"
-#include "lwip/err.h"
-#include "lwip/pbuf.h"
-#include "pico/cyw43_arch.h"
-#include "pico/time.h"
 #include "pico/util/queue.h"
 
 // Port definitions matching gf.c
@@ -33,37 +27,6 @@
 // Configuration
 #define ENDPOINT_LEN 128
 #define FILENAME_LEN 128
-#define CHUNK_SIZE 256
-#define URL_MAX_LEN 280 // endpoint + "/" + filename + null
-
-// Queue sizes
-#define OUTBOUND_QUEUE_SIZE 4
-#define INBOUND_QUEUE_SIZE 2 // Small queue creates TCP backpressure
-
-// HTTP request message (Core 0 -> Core 1)
-typedef struct
-{
-    char url[URL_MAX_LEN];
-    bool abort;
-} http_request_t;
-
-// HTTP response message (Core 1 -> Core 0)
-typedef struct
-{
-    uint8_t data[CHUNK_SIZE];
-    size_t len;
-    uint8_t status;
-} http_response_t;
-
-// State for HTTP transfer (Core 1)
-typedef struct
-{
-    bool transfer_active;
-    bool transfer_complete;
-    http_response_t current_chunk;
-    size_t total_bytes_received;
-    struct altcp_pcb* conn; // TCP connection for flow control
-} http_transfer_state_t;
 
 // State for port handling (Core 0)
 typedef struct
@@ -74,30 +37,30 @@ typedef struct
     uint8_t status;
 
     // Current chunk being read by Altair
-    uint8_t chunk_buffer[CHUNK_SIZE];
+    uint8_t chunk_buffer[HTTP_CHUNK_SIZE];
     size_t chunk_bytes_available;
     size_t chunk_position;
 } http_port_state_t;
 
-// Queues for inter-core communication
-static queue_t outbound_queue; // Core 0 -> Core 1
-static queue_t inbound_queue;  // Core 1 -> Core 0
+// Queues for inter-core communication (provided by http_get module)
+static queue_t* outbound_queue; // Core 0 -> Core 1
+static queue_t* inbound_queue;  // Core 1 -> Core 0
 
 // State variables
 static http_port_state_t port_state;
-static http_transfer_state_t transfer_state;
 
 // === CORE 0: Port Handlers ===
 
 void http_io_init(void)
 {
-    // Initialize queues
-    queue_init(&outbound_queue, sizeof(http_request_t), OUTBOUND_QUEUE_SIZE);
-    queue_init(&inbound_queue, sizeof(http_response_t), INBOUND_QUEUE_SIZE);
+    // Initialize HTTP GET module
+    http_get_init();
+
+    // Get queue pointers from http_get module
+    http_get_queues(&outbound_queue, &inbound_queue);
 
     // Initialize state
     memset(&port_state, 0, sizeof(port_state));
-    memset(&transfer_state, 0, sizeof(transfer_state));
     port_state.status = WG_EOF;
 }
 
@@ -154,7 +117,7 @@ size_t http_output(int port, uint8_t data, char* buffer, size_t buffer_length)
                 // Build full URL
                 http_request_t request;
                 memset(&request, 0, sizeof(request));
-                snprintf(request.url, URL_MAX_LEN, "%s/%s", port_state.endpoint, port_state.filename);
+                snprintf(request.url, HTTP_URL_MAX_LEN, "%s/%s", port_state.endpoint, port_state.filename);
                 request.abort = false;
 
                 // Reset chunk state for new transfer
@@ -163,7 +126,7 @@ size_t http_output(int port, uint8_t data, char* buffer, size_t buffer_length)
                 port_state.status = WG_WAITING;
 
                 // Send request to Core 1
-                if (!queue_try_add(&outbound_queue, &request))
+                if (!queue_try_add(outbound_queue, &request))
                 {
                     port_state.status = WG_FAILED;
                 }
@@ -185,7 +148,7 @@ uint8_t http_input(uint8_t port)
             if (port_state.chunk_bytes_available == 0)
             {
                 http_response_t response;
-                if (queue_try_remove(&inbound_queue, &response))
+                if (queue_try_remove(inbound_queue, &response))
                 {
                     // Load chunk
                     memcpy(port_state.chunk_buffer, response.data, response.len);
@@ -208,7 +171,7 @@ uint8_t http_input(uint8_t port)
                 {
                     // Try to get next chunk from queue
                     http_response_t response;
-                    if (queue_try_remove(&inbound_queue, &response))
+                    if (queue_try_remove(inbound_queue, &response))
                     {
                         // Load new chunk
                         memcpy(port_state.chunk_buffer, response.data, response.len);
@@ -249,292 +212,10 @@ uint8_t http_input(uint8_t port)
 
 // === CORE 1: HTTP Client ===
 
-// lwIP HTTP client callback: receive data
-static err_t http_recv_callback(void* arg, struct altcp_pcb* conn, struct pbuf* p, err_t err)
-{
-    http_transfer_state_t* state = (http_transfer_state_t*)arg;
-
-    if (err != ERR_OK || p == NULL)
-    {
-        if (p != NULL)
-        {
-            pbuf_free(p);
-        }
-        return err;
-    }
-
-    // Store connection for flow control
-    state->conn = conn;
-
-    // Track how much we've acked so far in this callback
-    size_t bytes_acked = 0;
-
-    // Process received data
-    struct pbuf* current = p;
-    size_t offset = 0;
-
-    while (current != NULL && offset < p->tot_len)
-    {
-        // Copy data from pbuf to response chunk
-        size_t bytes_to_copy = current->len;
-        uint8_t* data_ptr = (uint8_t*)current->payload;
-
-        while (bytes_to_copy > 0)
-        {
-            // Determine how much can fit in current chunk
-            size_t chunk_space = CHUNK_SIZE - state->current_chunk.len;
-            size_t copy_size = (bytes_to_copy > chunk_space) ? chunk_space : bytes_to_copy;
-
-            // Copy to chunk
-            memcpy(&state->current_chunk.data[state->current_chunk.len], data_ptr, copy_size);
-            state->current_chunk.len += copy_size;
-            data_ptr += copy_size;
-            bytes_to_copy -= copy_size;
-
-            // If chunk is full, send to queue
-            if (state->current_chunk.len >= CHUNK_SIZE)
-            {
-                state->current_chunk.status = WG_DATAREADY;
-
-                // FLOW CONTROL: Block until queue has room
-                // This creates TCP backpressure - we won't return from callback
-                // until there's room, so TCP window won't open for more data
-                while (!queue_try_add(&inbound_queue, &state->current_chunk))
-                {
-                    // Queue full - yield to let Altair consume on Core 0
-                    // While we're blocked here, TCP won't get more ACKs
-                    sleep_us(100);
-                }
-
-                // ACK only after successfully queuing (flow control)
-                altcp_recved(conn, CHUNK_SIZE);
-                bytes_acked += CHUNK_SIZE;
-
-                // Reset chunk for next data
-                memset(&state->current_chunk, 0, sizeof(state->current_chunk));
-            }
-        }
-
-        offset += current->len;
-        current = current->next;
-    }
-
-    state->total_bytes_received += p->tot_len;
-
-    // ACK remaining bytes that weren't part of a full chunk
-    size_t remaining = p->tot_len - bytes_acked;
-    if (remaining > 0 && state->current_chunk.len > 0)
-    {
-        // Don't ACK partial chunk data yet - wait until we have a full chunk
-        // or until transfer completes
-    }
-
-    pbuf_free(p);
-
-    return ERR_OK;
-}
-
-// lwIP HTTP client callback: headers received
-static err_t http_headers_done_callback(httpc_state_t* connection, void* arg, struct pbuf* hdr, u16_t hdr_len,
-                                        u32_t content_len)
-{
-    (void)connection;
-    (void)hdr;
-    (void)hdr_len;
-    // Headers received - content length available
-    (void)content_len;
-    return ERR_OK;
-}
-
-// lwIP HTTP client callback: transfer complete
-static void http_result_callback(void* arg, httpc_result_t httpc_result, u32_t rx_content_len, u32_t srv_res, err_t err)
-{
-    http_transfer_state_t* state = (http_transfer_state_t*)arg;
-
-    // Send final chunk if there's data
-    if (state->current_chunk.len > 0)
-    {
-        if (httpc_result == HTTPC_RESULT_OK)
-        {
-            state->current_chunk.status = WG_DATAREADY;
-        }
-        else
-        {
-            state->current_chunk.status = WG_FAILED;
-        }
-
-        while (!queue_try_add(&inbound_queue, &state->current_chunk))
-        {
-            sleep_us(100);
-        }
-    }
-
-    // Send final status message
-    http_response_t final;
-    memset(&final, 0, sizeof(final));
-
-    if (httpc_result == HTTPC_RESULT_OK && srv_res >= 200 && srv_res < 300)
-    {
-        final.status = WG_EOF;
-    }
-    else
-    {
-        final.status = WG_FAILED;
-    }
-
-    final.len = 0;
-    while (!queue_try_add(&inbound_queue, &final))
-    {
-        sleep_us(100);
-    }
-
-    state->transfer_active = false;
-    state->transfer_complete = true;
-}
-
-// Parse URL to extract hostname/IP, port, and path
-// Supports: http://hostname:port/path or just hostname:port/path
-// Returns 0 on success, -1 on error
-static int parse_url(const char* url, char* hostname, size_t hostname_len, u16_t* port, char* path, size_t path_len)
-{
-    const char* start = url;
-    const char* end;
-
-    // Skip "http://" prefix if present
-    if (strncmp(url, "http://", 7) == 0)
-    {
-        start = url + 7;
-    }
-    else if (strncmp(url, "HTTP://", 7) == 0)
-    {
-        start = url + 7;
-    }
-
-    // Find end of hostname (either ':', '/', or end of string)
-    end = start;
-    while (*end != '\0' && *end != ':' && *end != '/')
-    {
-        end++;
-    }
-
-    // Extract hostname
-    size_t host_len = end - start;
-    if (host_len >= hostname_len)
-    {
-        return -1; // Hostname too long
-    }
-    memcpy(hostname, start, host_len);
-    hostname[host_len] = '\0';
-
-    // Default port
-    *port = 80;
-
-    // Check for port specification
-    if (*end == ':')
-    {
-        // Parse port number
-        end++; // Skip ':'
-        const char* port_start = end;
-        unsigned long parsed_port = 0;
-
-        while (*end >= '0' && *end <= '9')
-        {
-            parsed_port = parsed_port * 10 + (*end - '0');
-            end++;
-        }
-
-        if (end > port_start && parsed_port > 0 && parsed_port <= 65535)
-        {
-            *port = (u16_t)parsed_port;
-        }
-        else
-        {
-            return -1; // Invalid port
-        }
-    }
-
-    // Extract path (everything after hostname:port)
-    if (*end == '/')
-    {
-        size_t path_length = strlen(end);
-        if (path_length >= path_len)
-        {
-            return -1; // Path too long
-        }
-        strcpy(path, end);
-    }
-    else
-    {
-        // No path specified, use root
-        strcpy(path, "/");
-    }
-
-    return 0;
-}
-
 void http_poll(void)
 {
-    // Check for new HTTP requests from Core 0
-    http_request_t request;
-
-    if (queue_try_remove(&outbound_queue, &request))
-    {
-        if (request.abort)
-        {
-            // TODO: Implement abort logic if needed
-            transfer_state.transfer_active = false;
-            return;
-        }
-
-        // Parse URL to extract hostname, port, and path
-        char hostname[128];
-        char path[128];
-        u16_t port;
-
-        if (parse_url(request.url, hostname, sizeof(hostname), &port, path, sizeof(path)) != 0)
-        {
-            // Send failure status
-            http_response_t response;
-            memset(&response, 0, sizeof(response));
-            response.status = WG_FAILED;
-            response.len = 0;
-            queue_try_add(&inbound_queue, &response);
-            return;
-        }
-
-        // Build full URL for lwIP (hostname/path, port separate)
-        char full_url[256];
-        snprintf(full_url, sizeof(full_url), "%s%s", hostname, path);
-        (void)full_url; // Used for debugging if needed
-
-        // Reset transfer state
-        memset(&transfer_state, 0, sizeof(transfer_state));
-        transfer_state.transfer_active = true;
-
-        // Configure HTTP client settings
-        httpc_connection_t settings;
-        memset(&settings, 0, sizeof(settings));
-        settings.use_proxy = 0;
-        settings.result_fn = http_result_callback;
-        settings.headers_done_fn = http_headers_done_callback;
-
-        // Start HTTP GET request with parsed port
-        httpc_state_t* connection = NULL;
-        err_t err =
-            httpc_get_file_dns(hostname, port, path, &settings, http_recv_callback, &transfer_state, &connection);
-
-        if (err != ERR_OK)
-        {
-            // Send failure status
-            http_response_t response;
-            memset(&response, 0, sizeof(response));
-            response.status = WG_FAILED;
-            response.len = 0;
-            queue_try_add(&inbound_queue, &response);
-
-            transfer_state.transfer_active = false;
-        }
-    }
+    // Delegate to http_get module
+    http_get_poll();
 }
 
 #else // !CYW43_WL_GPIO_LED_PIN - Stub implementations for non-WiFi boards

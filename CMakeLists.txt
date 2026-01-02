@@ -98,6 +98,7 @@ set(ALTAIR_SOURCES
     PortDrivers/time_io.c
     PortDrivers/utility_io.c
     PortDrivers/http_io.c
+    PortDrivers/http_get.c
     websocket_console.c
     wifi_config.c
     comms_mgr.c

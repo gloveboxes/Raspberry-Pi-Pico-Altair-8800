@@ -12,9 +12,12 @@
 #ifndef LWIP_SOCKET
 #define LWIP_SOCKET 0 // Disable BSD-style socket API
 #endif
-// MEM_LIBC_MALLOC must be 0 for pico_cyw43_arch_lwip_threadsafe_background
-// because malloc/free are not safe to call from the background IRQ context
-#define MEM_LIBC_MALLOC 0         // Use lwIP's internal memory pool
+#if PICO_CYW43_ARCH_POLL
+#define MEM_LIBC_MALLOC 1 // Use standard malloc/free for memory allocation
+#else
+// MEM_LIBC_MALLOC is incompatible with non polling versions
+#define MEM_LIBC_MALLOC 0 // Use lwIP's internal memory pool
+#endif
 #define MEM_ALIGNMENT 4           // Memory alignment (4 bytes for ARM)
 #define MEM_SIZE 16000            // Size of the heap memory (bytes) - Increased to prevent fragmentation
 #define MEMP_NUM_TCP_SEG 32       // Number of simultaneously queued TCP segments

@@ -21,9 +21,24 @@ bool websocket_console_try_dequeue_monitor_input(uint8_t* value);
 // Check if the console is running and Wi-Fi is connected.
 bool websocket_console_is_running(void);
 
-// Forward declarations for WebSocket polling functions (called from Core 1 main loop)
+// Forward declarations for internal functions
 void ws_poll_incoming(void);
 void ws_poll_outgoing(void);
+
+// Poll the WebSocket server for incoming and outgoing messages (internal use)
+static inline void ws_poll(volatile bool* pending_ws_input, volatile bool* pending_ws_output)
+{
+    if (*pending_ws_input)
+    {
+        *pending_ws_input = false;
+        ws_poll_incoming();
+    }
+    if (*pending_ws_output)
+    {
+        *pending_ws_output = false;
+        ws_poll_outgoing();
+    }
+}
 
 // Initialize WebSocket queues (internal use)
 void websocket_queue_init(void);

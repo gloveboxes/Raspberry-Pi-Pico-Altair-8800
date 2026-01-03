@@ -233,7 +233,7 @@ target_link_libraries(altair
 )
 
 if(PICO_CYW43_SUPPORTED)
-    target_link_libraries(altair pico_cyw43_arch_lwip_threadsafe_background)
+    target_link_libraries(altair pico_cyw43_arch_lwip_poll)
 endif()
 
 # Link Pimoroni Inky libraries if enabled

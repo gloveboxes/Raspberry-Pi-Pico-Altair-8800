@@ -16,50 +16,6 @@
 #include "pico/cyw43_arch.h"
 #include "pico/time.h"
 
-// Convert lwIP error code to string for debugging
-static const char* lwip_err_to_str(err_t err)
-{
-    switch (err)
-    {
-        case ERR_OK:
-            return "ERR_OK";
-        case ERR_MEM:
-            return "ERR_MEM (Out of memory)";
-        case ERR_BUF:
-            return "ERR_BUF (Buffer error)";
-        case ERR_TIMEOUT:
-            return "ERR_TIMEOUT";
-        case ERR_RTE:
-            return "ERR_RTE (Routing problem)";
-        case ERR_INPROGRESS:
-            return "ERR_INPROGRESS";
-        case ERR_VAL:
-            return "ERR_VAL (Illegal value)";
-        case ERR_WOULDBLOCK:
-            return "ERR_WOULDBLOCK";
-        case ERR_USE:
-            return "ERR_USE (Address in use)";
-        case ERR_ALREADY:
-            return "ERR_ALREADY (Already connecting)";
-        case ERR_ISCONN:
-            return "ERR_ISCONN (Already connected)";
-        case ERR_CONN:
-            return "ERR_CONN (Not connected)";
-        case ERR_IF:
-            return "ERR_IF (Low-level netif error)";
-        case ERR_ABRT:
-            return "ERR_ABRT (Connection aborted)";
-        case ERR_RST:
-            return "ERR_RST (Connection reset)";
-        case ERR_CLSD:
-            return "ERR_CLSD (Connection closed)";
-        case ERR_ARG:
-            return "ERR_ARG (Illegal argument)";
-        default:
-            return "UNKNOWN";
-    }
-}
-
 // Queue sizes
 #define OUTBOUND_QUEUE_SIZE 4
 #define INBOUND_QUEUE_SIZE 2 // Small queue creates TCP backpressure
@@ -341,9 +297,6 @@ void http_get_init(void)
 
 void http_get_poll(void)
 {
-    // Acquire lwIP lock for thread safety with background IRQ
-    cyw43_arch_lwip_begin();
-
     // PRIORITY 1: SERVICE PENDING BUFFERS (Resume Flow Control)
     // CRITICAL: Must drain pbufs BEFORE sending final messages!
     if (transfer_state.pending_pbuf != NULL)
@@ -459,7 +412,6 @@ void http_get_poll(void)
             else
             {
                 // Queue full, will retry next poll
-                cyw43_arch_lwip_end();
                 return;
             }
         }
@@ -500,7 +452,6 @@ void http_get_poll(void)
                 pbuf_free(transfer_state.pending_pbuf);
             }
             memset(&transfer_state, 0, sizeof(transfer_state));
-            cyw43_arch_lwip_end();
             return;
         }
 
@@ -511,14 +462,12 @@ void http_get_poll(void)
 
         if (parse_url(request.url, hostname, sizeof(hostname), &port, path, sizeof(path)) != 0)
         {
-            printf("HTTP GET failed: URL parse error for '%s'\n", request.url);
             // Send failure status
             http_response_t response;
             memset(&response, 0, sizeof(response));
             response.status = HTTP_WG_FAILED;
             response.len = 0;
             queue_try_add(&inbound_queue, &response);
-            cyw43_arch_lwip_end();
             return;
         }
 
@@ -545,7 +494,6 @@ void http_get_poll(void)
 
         if (err != ERR_OK)
         {
-            printf("HTTP GET failed: %s for '%s:%u%s'\n", lwip_err_to_str(err), hostname, port, path);
             // Send failure status
             http_response_t response;
             memset(&response, 0, sizeof(response));
@@ -556,8 +504,6 @@ void http_get_poll(void)
             transfer_state.transfer_active = false;
         }
     }
-
-    cyw43_arch_lwip_end();
 }
 
 void http_get_queues(queue_t** outbound, queue_t** inbound)

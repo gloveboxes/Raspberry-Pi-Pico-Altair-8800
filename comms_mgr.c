@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "hardware/timer.h"
 #include "pico/stdlib.h"
 
 #include "PortDrivers/http_io.h"
@@ -25,26 +26,39 @@
 #endif
 
 #define WIFI_CONNECT_TIMEOUT_MS 30000
-#define WS_OUTPUT_TIMER_INTERVAL_MS 20 // Batch outbound characters every 20ms
+#define WS_OUTPUT_TIMER_INTERVAL_MS 20
+#define WS_INPUT_TIMER_INTERVAL_MS 10
 
 static void websocket_console_core1_entry(void);
 
 volatile bool console_running = false;
 volatile bool console_initialized = false;
 volatile bool wifi_connected = false;
-volatile bool pending_ws_output = false; // Set by timer for batched output
+volatile bool pending_ws_output = false;
+volatile bool pending_ws_input = false;
 
 char ip_address_buffer[32] = {0};
 static char connected_ssid[WIFI_CONFIG_SSID_MAX_LEN + 1] = {0};
 
-// Timer for periodic WebSocket output batching
+// Timer for periodic WebSocket output
 static struct repeating_timer ws_output_timer;
 
-// Timer callback for output - fires every 20ms to batch outbound characters
+// Timer for periodic WebSocket input
+static struct repeating_timer ws_input_timer;
+
+// Timer callback for output - fires every 20ms
 static bool ws_output_timer_callback(struct repeating_timer* t)
 {
     (void)t;
     pending_ws_output = true;
+    return true; // Keep repeating
+}
+
+// Timer callback for input - fires every 10ms
+static bool ws_input_timer_callback(struct repeating_timer* t)
+{
+    (void)t;
+    pending_ws_input = true;
     return true; // Keep repeating
 }
 
@@ -59,8 +73,6 @@ static bool wifi_init(void)
     }
 
     wifi_set_ready(true);
-
-    // Note: cyw43_arch_enable_sta_mode handles its own locking internally
     cyw43_arch_enable_sta_mode();
 
     // Load credentials from flash storage
@@ -83,7 +95,6 @@ static bool wifi_init(void)
     strncpy(connected_ssid, ssid, sizeof(connected_ssid) - 1);
     connected_ssid[sizeof(connected_ssid) - 1] = '\0';
 
-    // Note: cyw43_arch_wifi_connect_timeout_ms handles its own locking internally
     int err = cyw43_arch_wifi_connect_timeout_ms(ssid, password, WIFI_AUTH, WIFI_CONNECT_TIMEOUT_MS);
 
     if (err != 0)
@@ -97,11 +108,9 @@ static bool wifi_init(void)
 
     // Use performance power management mode for better responsiveness
     // CYW43_PERFORMANCE_PM = short 200ms sleep retention, good balance
-    // Note: cyw43_wifi_pm doesn't need guards - the CYW43 driver handles its own locking
     cyw43_wifi_pm(&cyw43_state, CYW43_PERFORMANCE_PM);
 
-    // Get and store IP address - need guards for netif access
-    cyw43_arch_lwip_begin();
+    // Get and store IP address
     struct netif* netif = netif_default;
     if (netif && netif_is_up(netif))
     {
@@ -112,7 +121,6 @@ static bool wifi_init(void)
             wifi_set_ip_address(ip_address_buffer); // Cache for display
         }
     }
-    cyw43_arch_lwip_end();
 
     printf("[Core1] Wi-Fi connected. IP: %s\n", ip_address_buffer);
     return true;
@@ -161,7 +169,6 @@ static void websocket_console_core1_entry(void)
     uint32_t ip_raw = 0;
     if (wifi_ok)
     {
-        cyw43_arch_lwip_begin();
         struct netif* netif = netif_default;
         if (netif && netif_is_up(netif))
         {
@@ -171,7 +178,6 @@ static void websocket_console_core1_entry(void)
                 ip_raw = ip4_addr_get_u32(addr);
             }
         }
-        cyw43_arch_lwip_end();
     }
     multicore_fifo_push_blocking(ip_raw);
 
@@ -188,25 +194,23 @@ static void websocket_console_core1_entry(void)
         return;
     }
 
+    // Start WebSocket timers on Core 1 (after WiFi init)
+    add_repeating_timer_ms(-WS_OUTPUT_TIMER_INTERVAL_MS, ws_output_timer_callback, NULL, &ws_output_timer);
+    printf("[Core1] Started WebSocket output timer (%dms interval)\n", WS_OUTPUT_TIMER_INTERVAL_MS);
+
+    add_repeating_timer_ms(-WS_INPUT_TIMER_INTERVAL_MS, ws_input_timer_callback, NULL, &ws_input_timer);
+    printf("[Core1] Started WebSocket input timer (%dms interval)\n", WS_INPUT_TIMER_INTERVAL_MS);
+
     // Mark console as initialized only after successful network stack initialization
     console_initialized = true;
+    printf("[Core1] WebSocket server running, entering poll loop\n");
 
-    // Start outbound timer for character batching (20ms interval)
-    add_repeating_timer_ms(-WS_OUTPUT_TIMER_INTERVAL_MS, ws_output_timer_callback, NULL, &ws_output_timer);
-    printf("[Core1] WebSocket server running (IRQ mode), entering main loop\n");
-
-    // Main loop - WiFi/lwIP is serviced automatically by background IRQ
-    // Incoming: polled immediately for responsiveness
-    // Outgoing: batched via timer for efficiency
+    // Main poll loop - all CYW43/lwIP access stays on core 1
     while (true)
     {
-        ws_poll_incoming();
-        if (pending_ws_output)
-        {
-            pending_ws_output = false;
-            ws_poll_outgoing();
-        }
-        http_poll();
+        cyw43_arch_poll();
+        ws_poll(&pending_ws_input, &pending_ws_output);
+        http_poll(); // Poll for HTTP file transfer requests
         tight_loop_contents();
     }
 }
